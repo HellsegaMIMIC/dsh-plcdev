@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PLCdev 工程协同工作台</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/topology.css"><link rel="stylesheet" href="/panel-layout.css"><script src="/app.js" defer></script><script src="/panel-layout.js" defer></script></head><body>
+<div id="plcdev-workbench-refined" class="t-layout-ordered" aria-label="PLCdev 工程协同工作台">
+
+<div class="p-window">
+
+  <div class="p-shell">
+    <aside id="p-explorer" class="p-explorer" aria-label="工程浏览器">
+      <div class="p-pane-title p-explorer-brand"><div class="p-brand"><span class="p-brand-mark"><i data-lucide="workflow" aria-hidden="true"></i></span>PLCdev</div><h2>工程</h2><button id="p-explorer-toggle" class="p-icon-button" aria-label="收起工程树" title="收起工程树">‹</button></div>
+      <div class="p-project-actions"><button id="p-new-project" class="p-button" data-action="new-project" disabled><i data-lucide="plus" aria-hidden="true"></i>新建工程</button><button id="p-open-project" class="p-button" data-action="open-project" disabled>打开／导入</button></div>
+      <div class="p-tree-caption">本机工作空间</div>
+      <div id="p-project-tree" class="p-project-tree" aria-label="工程树"><p class="p-tree-empty">正在读取工程清单…</p></div>
+      <div class="p-explorer-foot"><span class="p-explorer-hint">选择工程切换查看，运行会话保持在所属工程。</span><code id="p-project-id" title="当前工程标识">尚未读取工程</code></div>
+      <div hidden><label for="p-project">当前工程</label><select id="p-project" aria-label="选择工程" disabled><option value="batch-conveyor">正在读取工程清单…</option></select></div>
+    </aside>
+    <div id="p-explorer-resizer" class="p-panel-resizer" role="separator" aria-label="调整工程树宽度" aria-orientation="vertical" aria-controls="p-explorer" tabindex="0"></div>
+    <div class="p-center">
+      <section class="p-context p-toolbar" aria-label="当前工程">
+        <button id="p-explorer-restore" class="p-icon-button" aria-label="展开工程树" title="展开工程树">☰</button>
+        <span class="p-folder"><i data-lucide="folder-open" aria-hidden="true"></i></span>
+        <div class="p-context-title"><h1 id="p-current-title">未选择工程</h1></div>
+        <button class="p-icon-button" data-select="project" aria-label="查看工程文件与配置" data-tooltip="工程文件与配置"><i data-lucide="folder-cog" aria-hidden="true"></i></button>
+        <button id="p-configure-interface" class="p-button" data-action="configure-interface" hidden disabled>变量与操作</button>
+        <button id="p-configure-project" class="p-button" data-action="configure-project" hidden disabled>画面与场景</button>
+        <button id="p-agent-open" class="p-button" data-action="agent-open" disabled>AI 任务</button>
+        <section class="p-session" aria-label="当前工程运行会话" hidden>
+          <span id="p-execution" class="p-execution"></span>
+          <div class="p-session-actions"><button id="p-session-main" class="p-button "></button><button id="p-session-hmi" class="p-button" data-action="show-hmi">打开 HMI</button><button id="p-session-end" class="p-button " data-action="ask-end"><i data-lucide="power" aria-hidden="true"></i>结束会话</button></div>
+        </section>
+      </section>
+      <p id="p-catalog-help" class="p-catalog-help" hidden>新建／导入工程需重启工作台后台后启用；现有工程和会话可继续使用。正在运行的会话请结束后再重启。</p>
+  <div id="p-running-projects" class="p-running-projects" aria-label="其他工程的运行会话" aria-live="polite" hidden></div>
+  <div id="notice" class="live-notice" role="status" aria-live="polite" hidden></div>
+  <section id="p-connection" class="p-connection" aria-live="polite">
+    <h2 id="p-connection-title">正在连接工作台</h2><p id="p-connection-message">正在验证入口并读取工程清单…</p>
+    <div id="p-launch-help" hidden><p>请在工程目录的文件资源管理器中运行：</p><code>software\workbench\Start-PLCdev.cmd</code><p>使用启动器新打开的页面；直接复制地址到其他浏览器不会携带本机授权。</p></div>
+    <button id="p-connection-retry" class="p-button" data-action="retry-connection" disabled>重试连接</button>
+  </section>
+  <main class="p-work" aria-label="系统拓扑" hidden>
+
+
+  <div id="p-end-confirm" class="p-end" hidden><span><span id="p-end-title"></span><small id="p-end-note">退出所属 Runtime 与 HMI；工程保持打开，外部场景保留。</small></span><div class="p-session-actions"><button class="p-button " data-action="cancel-end">取消</button><button class="p-button " data-action="end">确认结束</button></div></div>
+    <div class="t-stage">
+    <div id="p-graph" class="p-graph" role="group" aria-label="当前工程组件关系">
+      <svg id="t-wires" class="t-wires" aria-hidden="true">
+        <defs><marker id="t-arrow-neutral" class="t-arrow" data-tone="neutral" viewBox="0 0 12 12" refX="17" refY="6" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 2 1 L 10 6 L 2 11 Z"></path></marker><marker id="t-arrow-ok" class="t-arrow" data-tone="ok" viewBox="0 0 12 12" refX="17" refY="6" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 2 1 L 10 6 L 2 11 Z"></path></marker><marker id="t-arrow-warn" class="t-arrow" data-tone="warn" viewBox="0 0 12 12" refX="17" refY="6" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 2 1 L 10 6 L 2 11 Z"></path></marker><marker id="t-arrow-selected" class="t-arrow" data-tone="selected" viewBox="0 0 12 12" refX="17" refY="6" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 2 1 L 10 6 L 2 11 Z"></path></marker></defs>
+        <g class="t-pipeline" data-pipeline="generate" data-kind="delivery" data-flow="false" data-quality="unknown"><path class="t-pipe-casing"></path><path class="t-wire" data-route="generate" data-kind="delivery"></path><path class="t-wire-hit" data-route-hit="generate" data-select="generate"></path></g>
+        <g class="t-pipeline" data-pipeline="load" data-kind="delivery" data-flow="false" data-quality="unknown"><path class="t-pipe-casing"></path><path class="t-wire" data-route="load" data-kind="delivery"></path><path class="t-wire-hit" data-route-hit="load" data-select="load"></path></g>
+        <g class="t-pipeline" data-pipeline="variables" data-kind="communication" data-flow="false" data-quality="unknown"><path class="t-pipe-casing"></path><path class="t-wire" data-route="variables" data-kind="communication"></path><path class="t-pipe-flow"></path><path class="t-wire-hit" data-route-hit="variables" data-select="variables"></path></g>
+        <g class="t-pipeline" data-pipeline="io" data-kind="communication" data-flow="false" data-quality="unknown"><path class="t-pipe-casing"></path><path class="t-wire" data-route="io" data-kind="communication"></path><path class="t-pipe-flow"></path><path class="t-wire-hit" data-route-hit="io" data-select="io"></path></g>
+      </svg>
+      <article class="p-node t-editor" data-node="eez"><button class="p-node-main " data-select="eez" aria-label="查看 EEZ Studio"><span class="t-tool-title"><img src="/assets/eez-studio-logo.png" alt="EEZ Studio 产品标志">EEZ Studio</span><span id="p-state-eez" class="p-state"></span><span id="p-file-eez" class="p-file"></span></button><button class="p-launch p-icon-button " data-action="open-eez" aria-label="打开当前工程的 EEZ 画面" data-tooltip="打开画面工程"><i data-lucide="external-link" aria-hidden="true"></i></button><button id="t-eez-out" class="t-port t-port-bottom " data-select="generate" data-side="bottom" data-kind="delivery" aria-label="EEZ 画面产物接口"><span class="t-port-dot"></span><span class="t-port-name">产物</span></button></article>
+      <article class="p-node t-editor" data-node="plc"><button class="p-node-main " data-select="plc" aria-label="查看 OpenPLC Editor"><span class="t-tool-title"><img src="/assets/openplc-logo.png" alt="OpenPLC 产品标志">OpenPLC</span><span id="p-state-plc" class="p-state"></span><span id="p-file-plc" class="p-file"></span></button><button class="p-launch p-icon-button " data-action="open-plc" aria-label="打开当前工程的 OpenPLC 程序" data-tooltip="打开 PLC 工程"><i data-lucide="external-link" aria-hidden="true"></i></button><button id="t-plc-out" class="t-port t-port-bottom " data-select="load" data-side="bottom" data-kind="delivery" aria-label="OpenPLC 程序产物接口"><span class="t-port-dot"></span><span class="t-port-name">产物</span></button></article>
+      <article class="p-node t-device" data-node="hmi"><button class="p-node-main " data-select="hmi" aria-label="查看 HMI 软件画面"><span class="t-device-body" aria-hidden="true"><svg class="t-equipment-art" viewBox="0 0 144 88" aria-hidden="true"><rect class="art-shell" x="14" y="4" width="116" height="66" rx="5"/><rect class="art-display" x="22" y="12" width="100" height="50" rx="2"/><path class="art-detail" d="M28 24h44M28 30h28M65 72v8H46m33-8v8h19"/><path class="art-accent" d="m30 52 12-8 13 5 14-16 13 7"/><rect class="art-accent-fill" x="97" y="24" width="16" height="8" rx="2"/><rect class="art-soft" x="97" y="39" width="16" height="8" rx="2"/></svg></span><span class="p-name">HMI</span><span class="p-role">LVGL 软件画面</span><span id="p-state-hmi" class="p-state"></span><span id="p-file-hmi" class="p-file"></span></button><button class="p-launch p-icon-button " data-action="open-hmi" aria-label="打开当前工程的 HMI" data-tooltip="打开操作画面"><i data-lucide="external-link" aria-hidden="true"></i></button><button id="t-hmi-in" class="t-port t-port-top " data-select="generate" data-side="top" data-kind="delivery" aria-label="HMI 画面装载接口"><span class="t-port-dot"></span><span class="t-port-name">画面</span></button><button id="t-hmi-data" class="t-port t-port-right " data-select="variables" data-side="right" data-kind="communication" aria-label="HMI 变量接口"><span class="t-port-dot"></span><span class="t-port-name">变量</span></button></article>
+      <article class="p-node t-device" data-node="runtime"><button class="p-node-main " data-select="runtime" aria-label="查看 OpenPLC 软件 Runtime"><span class="t-device-body" aria-hidden="true"><svg class="t-equipment-art" viewBox="0 0 144 88" aria-hidden="true"><path class="art-detail" d="M6 76h132"/><rect class="art-shell" x="24" y="5" width="96" height="72" rx="3"/><rect class="art-display" x="35" y="17" width="53" height="40" rx="2"/><text x="44" y="42" class="art-label">PLC</text><circle class="art-soft" cx="104" cy="22" r="3"/><circle class="art-soft" cx="104" cy="34" r="3"/><circle class="art-soft" cx="104" cy="46" r="3"/><path class="art-detail" d="M36 65h10m7 0h10m7 0h10m7 0h10m7 0h5M18 18h6m-6 12h6m-6 12h6m-6 12h6"/></svg></span><span class="p-name">OpenPLC Runtime</span><span class="p-role">本机执行目标</span><span id="p-state-runtime" class="p-state"></span><span id="p-file-runtime" class="p-file"></span></button><button class="p-launch p-icon-button " data-select="runtime" aria-label="管理当前 Runtime" data-tooltip="执行目标详情"><i data-lucide="settings-2" aria-hidden="true"></i></button><button id="t-runtime-in" class="t-port t-port-top " data-select="load" data-side="top" data-kind="delivery" aria-label="Runtime 程序装载接口"><span class="t-port-dot"></span><span class="t-port-name">程序</span></button><button id="t-runtime-data" class="t-port t-port-left " data-select="variables" data-side="left" data-kind="communication" aria-label="Runtime 数据服务接口"><span class="t-port-dot"></span><span class="t-port-name">数据</span></button><button id="t-runtime-io" class="t-port t-port-right " data-select="io" data-side="right" data-kind="communication" aria-label="Runtime Modbus 输入输出接口"><span class="t-port-dot"></span><span class="t-port-name">I/O</span></button></article>
+      <article class="p-node t-device" data-node="fio"><button class="p-node-main " data-select="fio" aria-label="查看 Factory I/O 虚拟场景"><span class="t-device-body t-factory-body" aria-hidden="true"><svg class="t-equipment-art" viewBox="0 0 144 88" aria-hidden="true"><path class="art-shell" d="M17 53 120 41q13-1 13 11v4q0 8-9 9L21 77Q9 78 9 67v-4q0-8 8-10Z"/><path class="art-detail" d="m24 58 1 12m15-14 1 12m15-14 1 12m15-14 1 12m15-14 1 12m15-14 1 12m15-14 1 12M28 77v9m86-20v12"/><path class="art-shell" d="m37 51 0-25 24-3v25Zm24-28 9-5v25l-9 5Zm-24 3 9-5 24-3M88 45V18l21-3v27Zm21-30 8-4v27l-8 4ZM88 18l8-4 21-3"/></svg></span><span class="p-name">Factory I/O</span><span class="p-role">虚拟产线场景</span><span id="p-state-fio" class="p-state"></span><span id="p-file-fio" class="p-file"></span><span id="p-factory-identity" class="p-factory-identity">未确认当前场景</span></button><button id="p-fio-launch" class="p-launch p-icon-button " data-action="open-fio" aria-label="打开当前工程场景" data-tooltip="打开工程场景"><i data-lucide="external-link" aria-hidden="true"></i></button><button id="t-fio-in" class="t-port t-port-left " data-select="io" data-side="left" data-kind="communication" aria-label="Factory I/O Modbus 驱动接口"><span class="t-port-dot"></span><span class="t-port-name">驱动</span></button></article>
+      <div class="p-edge" data-edge="generate" data-kind="delivery"><button class="p-edge-button " data-select="generate" aria-label="查看 EEZ 到 HMI 的生成构建状态"><i data-lucide="arrow-down" aria-hidden="true"></i><span class="t-line-caption"><strong id="p-line-name-generate">生成画面</strong><span class="t-line-state" id="p-label-generate">生成构建</span></span><span class="t-mobile-ends">EEZ → HMI</span></button></div>
+      <div class="p-edge" data-edge="load" data-kind="delivery"><button class="p-edge-button " data-select="load" aria-label="查看 OpenPLC 到 Runtime 的编译装载状态"><i data-lucide="arrow-down" aria-hidden="true"></i><span class="t-line-caption"><strong id="p-line-name-load">编译装载</strong><span class="t-line-state" id="p-label-load">编译装载</span></span><span class="t-mobile-ends">OpenPLC → Runtime</span></button></div>
+      <div class="p-edge" data-edge="variables" data-kind="communication"><button class="p-edge-button " data-select="variables" aria-label="查看 HMI 与 Runtime 的变量通信"><i data-lucide="arrow-left-right" aria-hidden="true"></i><span class="t-line-caption"><strong id="p-line-name-variables">变量读写</strong><span class="t-line-state" id="p-label-variables">变量服务</span></span><span class="t-mobile-ends">HMI ↔ Runtime</span></button></div>
+      <div class="p-edge" data-edge="io" data-kind="communication"><button class="p-edge-button " data-select="io" aria-label="查看 Runtime 与 Factory I/O 的输入输出通信"><i data-lucide="arrow-left-right" aria-hidden="true"></i><span class="t-line-caption"><strong id="p-line-name-io">Modbus TCP</strong><span class="t-line-state" id="p-label-io">Modbus TCP</span></span><span class="t-mobile-ends">Runtime ↔ 场景</span></button></div>
+      <div class="t-legend"><span><b class="t-line-sample delivery"></b>开发交付</span><span><b class="t-line-sample"></b>运行通信</span><span><b class="t-point-sample"></b>新鲜状态已确认</span></div>
+    </div>
+    </div>
+  </main>
+
+      <div id="p-info-resizer" class="p-panel-resizer" role="separator" aria-label="调整信息区高度" aria-orientation="horizontal" aria-controls="p-info-dock" tabindex="0" hidden></div>
+      <section id="p-info-dock" class="p-info-dock" aria-label="工程信息" hidden>
+        <div id="p-info-tabs" class="p-info-tabs" role="tablist" aria-label="工程信息标签">
+          <button id="p-tab-properties" role="tab" data-info-tab="properties" aria-selected="true" aria-controls="p-info-properties" tabindex="0"><i data-lucide="settings-2" aria-hidden="true"></i>属性</button>
+          <button id="p-tab-monitor" role="tab" data-info-tab="monitor" aria-selected="false" aria-controls="p-info-monitor" tabindex="-1"><i data-lucide="activity" aria-hidden="true"></i>变量监视</button>
+          <button id="p-tab-diagnostics" role="tab" data-info-tab="diagnostics" aria-selected="false" aria-controls="p-info-diagnostics" tabindex="-1"><i data-lucide="list" aria-hidden="true"></i>日志与诊断</button>
+          <span class="p-info-caption">当前工程</span><button id="p-info-toggle" class="p-icon-button" aria-label="收起信息区" title="收起信息区"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+        </div>
+        <div id="p-info-properties" class="p-info-panel" role="tabpanel" aria-labelledby="p-tab-properties" tabindex="0">
+    <section id="p-inspector" class="p-inspector" aria-label="所选对象详情" hidden>
+      <div class="p-inspector-head"><span id="p-detail-icon"></span><h3 id="p-detail-title"></h3><small id="p-detail-scope"></small></div>
+      <dl id="p-fields" class="p-fields"></dl><div id="p-issues" class="p-issue-list" hidden></div>
+      <div id="p-detail-bottom" class="p-detail-bottom"><p id="p-detail-note" class="p-detail-note"></p><div class="p-detail-actions"><button id="p-detail-action" class="p-button " hidden></button><button id="p-detail-secondary" class="p-button" hidden></button></div></div>
+    </section>
+
+          <p id="p-properties-empty" class="p-panel-empty" hidden>选择工程、组件或连线查看属性。</p>
+        </div>
+        <div id="p-info-monitor" class="p-info-panel" role="tabpanel" aria-labelledby="p-tab-monitor" tabindex="0" hidden>
+  <details id="p-local-debug" class="p-local-debug" hidden>
+    <summary>本机调试 <span>启停输入与变量</span></summary>
+    <div class="p-debug-body">
+      <div class="p-debug-context"><strong id="p-debug-scope"></strong><span id="p-state-inputs" class="p-state"></span></div>
+      <div class="p-debug-controls">
+        <div class="p-input-values"><span>启动输入 <b id="p-input-start">—</b></span><span>停止输入 <b id="p-input-stop">—</b></span><span>运行输出 <b id="p-input-motor">—</b></span></div>
+        <div class="p-input-actions"><button id="p-input-start-button" class="p-button" data-action="input-start">启动脉冲</button><button id="p-input-stop-button" class="p-button" data-action="input-stop">停止脉冲</button></div>
+      </div>
+      <p class="p-input-note">仅操作当前工程的本机软件输入，脉冲由服务端自动释放；运行输出由 PLC 逻辑决定。</p>
+    </div>
+  </details>
+  <details id="p-user-monitor" class="p-local-debug p-user-monitor" hidden>
+    <summary>变量监视 <span>当前编译程序 · 只读</span></summary>
+    <div class="p-debug-body"><div class="p-debug-context"><strong id="p-monitor-scope"></strong><span id="p-monitor-quality" class="p-state"></span></div>
+      <p id="p-monitor-empty" class="p-input-note">编译并准备工程后，在此查看程序变量。</p>
+      <div class="p-monitor-scroll"><table id="p-monitor-table" hidden><thead><tr><th scope="col">变量路径</th><th scope="col">类型</th><th scope="col">值</th><th scope="col">质量</th></tr></thead><tbody id="p-monitor-rows"></tbody></table></div>
+      <p class="p-input-note">变量来自当前会话的编译符号。停止后显示历史值；连接失效时数值隐藏。</p>
+    </div>
+  </details>
+
+          <p id="p-info-empty" class="p-panel-empty" hidden>此工程的操作与过程变量请在关联 HMI 中查看。</p>
+        </div>
+        <div id="p-info-diagnostics" class="p-info-panel" role="tabpanel" aria-labelledby="p-tab-diagnostics" tabindex="0" hidden>
+        <div class="p-runtime-summary" aria-label="工程与会话信息">
+          <div><strong>工程</strong><span id="p-project-open">等待连接</span><span id="p-project-description" class="p-project-description"></span></div>
+          <div><strong>运行会话</strong><span id="p-session-id" class="p-session-id"></span><span id="p-session-target" class="p-session-target"></span><span id="p-mode"></span></div>
+        </div>
+  <div id="p-other" class="p-other" aria-label="运行目标归属" hidden></div>
+  <details id="p-more" class="activity" hidden><summary>会话动态与环境</summary><div id="dependencies"></div><ol id="events"></ol></details><div class="p-runtime-notes"><p id="p-user-session-note" class="p-user-session-note" hidden>本机会话最长 60 分钟，到期自动停止 PLC 并结束会话；重新准备不会自动运行。</p><p id="p-user-edit-note" class="p-user-session-note" hidden>新建的空白工程请先在 OpenPLC 添加程序和变量。没有可观察变量时，无法准备运行会话。</p></div>
+        </div>
+      </section>
+<footer class="p-statusbar" aria-label="工作台状态">
+  <button id="p-health" class="p-health" data-select="issues" aria-label="查看状态与待处理项"></button>
+  <div id="p-feedback" class="p-feedback" role="status" aria-live="polite" hidden></div>
+  <span id="backend" class="p-backend-status" role="status">连接中</span>
+</footer>
+    </div>
+  </div>
+  <dialog id="p-agent-dialog" class="p-project-dialog p-agent-dialog" aria-labelledby="p-agent-title">
+    <div class="p-project-dialog-head"><h2 id="p-agent-title">工程 AI 任务</h2><button id="p-agent-close" class="p-icon-button" type="button" data-action="agent-close" aria-label="关闭 AI 任务">×</button></div>
+    <p id="p-agent-scope" class="p-project-intro"></p>
+    <p id="p-agent-capabilities" class="p-project-intro" aria-live="polite"></p>
+    <p class="p-project-intro">当前支持 Count → BatchCount 规则改名，AI 模型尚未接入总控。结果保存为独立候选，可在 OpenPLC 查看；原工程和运行会话保持原状。</p>
+    <form id="p-agent-form">
+      <label>任务需求<textarea id="p-agent-request" rows="3" maxlength="4000" required placeholder="例如：将 Count 改为 BatchCount"></textarea></label>
+      <button id="p-agent-example" type="button" class="p-button p-agent-example" data-action="agent-example">填入改名样例</button>
+      <label class="p-agent-basis"><input id="p-agent-saved-basis" type="checkbox"><span>基于已保存版本生成候选<small>不包含尚未保存的编辑。需要包含最新修改时，请先在编辑器中保存，再刷新任务。</small></span></label>
+      <p id="p-agent-message" role="status" aria-live="polite"></p>
+      <div class="p-project-dialog-actions"><button id="p-agent-refresh" type="button" class="p-button" data-action="agent-refresh">刷新任务</button><button id="p-agent-submit" type="submit" class="p-button">创建候选任务</button></div>
+    </form>
+    <div class="p-agent-list-head"><h3>本工程任务</h3><span id="p-agent-revision"></span></div>
+    <div id="p-agent-tasks" class="p-agent-tasks" aria-live="polite">正在读取任务…</div>
+  </dialog>
+
+  <dialog id="p-project-dialog" class="p-project-dialog" aria-labelledby="p-project-dialog-title">
+    <form id="p-project-form">
+      <div class="p-project-dialog-head"><h2 id="p-project-dialog-title">新建工程</h2><button id="p-project-dialog-close" class="p-icon-button" type="button" data-action="close-project-dialog" aria-label="关闭工程窗口">×</button></div>
+      <p class="p-project-intro">一个工程保存 PLC 应用、运行目标和可选组件的关联。创建或打开工程不会启动、停止其他运行会话。</p>
+      <label>操作<select id="p-project-operation"><option value="create">新建 OpenPLC 工程</option><option value="import">导入 OpenPLC 工程副本</option><option value="open">打开已有 PLCdev 工程</option></select></label>
+      <div id="p-project-create-fields">
+        <label>工程名称<input id="p-project-name" name="projectName" maxlength="80" required autocomplete="off" placeholder="例如：分拣单元" /></label>
+        <label>保存位置 · 本机父目录<input id="p-project-parent" name="parent" required autocomplete="off" placeholder="例如：D:\我的工程" /></label>
+        <small>将在此目录中创建同名工程文件夹。已有内容不会被覆盖。</small>
+        <label id="p-project-source-field" hidden>原 OpenPLC 工程目录<input id="p-project-source" name="source" autocomplete="off" placeholder="包含 project.json 的文件夹" disabled /></label>
+        <label id="p-project-language-field">初始语言<select id="p-project-language"><option value="ld">梯形图 LD</option><option value="st">结构化文本 ST</option></select></label>
+        <label>仿真工具意向 · 可稍后决定<select id="p-project-simulation"><option value="none">暂不选择</option><option value="oip">Open Industry Project（OIP）</option><option value="factoryio">Factory I/O</option></select></label>
+        <small>此项仅随工程登记选型。当前先使用无设备连接的本机 Runtime；场景与通信尚未配置。</small>
+      </div>
+      <label id="p-project-manifest-field" hidden>PLCdev 工程文件<input id="p-project-manifest" name="manifest" autocomplete="off" placeholder="例如：D:\我的工程\分拣单元\project.plcdev" disabled /></label>
+      <p id="p-project-form-message" role="status" aria-live="polite"></p>
+      <div class="p-project-dialog-actions"><button id="p-project-dialog-cancel" class="p-button" type="button" data-action="close-project-dialog">取消</button><button id="p-project-submit" class="p-button" type="submit">创建工程</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="p-interface-dialog" class="p-project-dialog p-interface-dialog" aria-labelledby="p-interface-title">
+    <form id="p-interface-form">
+      <div class="p-project-dialog-head"><h2 id="p-interface-title">工程变量与操作</h2><button id="p-interface-close" class="p-icon-button" type="button" data-action="close-interface" aria-label="关闭变量与操作">×</button></div>
+      <p id="p-interface-scope" class="p-project-intro"></p>
+      <p class="p-project-intro">声明画面可读取的 PLC 变量，以及用户可执行的操作。AI 只使用标为“AI 可见”的变量和已启用操作；此处定义接口，不执行操作。</p>
+      <div class="p-interface-section-head"><h3>变量</h3><span>PLC 路径必须对应当前工程的程序变量</span><button id="p-interface-add-variable" class="p-button" type="button" data-action="interface-add-variable">＋ 添加变量</button></div>
+      <div class="p-interface-scroll"><table class="p-interface-table"><thead><tr><th>标识</th><th>名称</th><th>PLC 路径</th><th>类型</th><th>权限</th><th>最小</th><th>最大</th><th>单位</th><th>AI</th><th></th></tr></thead><tbody id="p-interface-variables"></tbody></table></div>
+      <p id="p-interface-empty-variables" class="p-interface-empty">尚无变量。添加已有 PLC 变量后，可在 FUXA 中绑定显示或操作。</p>
+      <div class="p-interface-section-head"><h3>操作</h3><span>可操作变量仍须声明操作；禁用操作不会执行</span><button id="p-interface-add-operation" class="p-button" type="button" data-action="interface-add-operation">＋ 添加操作</button></div>
+      <div class="p-interface-scroll"><table class="p-interface-table p-interface-operation-table"><thead><tr><th>标识</th><th>名称</th><th>方式</th><th>目标变量</th><th>取值</th><th>固定值</th><th>脉冲 ms</th><th>状态</th><th>AI</th><th></th></tr></thead><tbody id="p-interface-operations"></tbody></table></div>
+      <p id="p-interface-empty-operations" class="p-interface-empty">没有操作时，HMI 只显示变量。BOOL 脉冲会置 true 后自动复位为 false。</p>
+      <label>沿用已有 FUXA 布局 · 可选本机 .fuxap 路径<input id="p-interface-hmi-source" autocomplete="off" placeholder="留空将按此接口生成新的可编辑画面" /><small>每次保存均生成新配置版本。留空会重新生成默认画面，原画面文件保留；填写已有画面路径时，校验其绑定后导入副本。</small></label>
+      <div class="p-integration-footer"><p id="p-interface-summary" class="p-interface-summary"></p><p id="p-interface-message" role="status" aria-live="polite"></p><div class="p-project-dialog-actions"><button id="p-interface-cancel" class="p-button" type="button" data-action="close-interface">取消</button><button id="p-interface-submit" class="p-button" type="submit">保存变量与操作</button></div></div>
+    </form>
+  </dialog>
+  <dialog id="p-integration-dialog" class="p-project-dialog p-integration-dialog" aria-labelledby="p-integration-title">
+    <form id="p-integration-form">
+      <div class="p-project-dialog-head"><h2 id="p-integration-title">画面、场景与变量绑定</h2><button id="p-integration-close" class="p-icon-button" type="button" data-action="close-integration" aria-label="关闭配置">×</button></div>
+      <p id="p-integration-scope" class="p-project-intro"></p>
+      <p class="p-project-intro">采用批次邮箱协议，关联 FUXA 原生画面与 OIP 场景。此处配置固定功能的变量映射，不能将任意 PLC 程序自动变成批次工艺。</p>
+      <div class="p-integration-files">
+        <label>FUXA 画面 · 本机 .fuxap 文件<input id="p-integration-hmi" autocomplete="off" placeholder="输入绝对路径，保存时导入工程副本" /><small id="p-integration-saved-hmi"></small></label>
+        <label>OIP 场景 · 本机 project.json 或目录<input id="p-integration-oip" autocomplete="off" placeholder="输入绝对路径，保存时导入工程副本" /><small id="p-integration-saved-oip"></small></label>
+      </div>
+      <details class="p-binding-section" open><summary>PLC 变量映射 <span>固定角色 · 可修改路径和 IEC 地址</span></summary><div class="p-binding-scroll"><table class="p-binding-table"><thead><tr><th scope="col">协议角色</th><th scope="col">PLC 变量路径</th><th scope="col">IEC 类型</th><th scope="col">IEC 地址</th></tr></thead><tbody id="p-binding-rows"></tbody></table></div></details>
+      <details class="p-binding-section"><summary>OIP 点位 <span>场景身份与输入输出</span></summary><div class="p-oip-bindings">
+        <label>场景名称<input id="p-binding-scene" required autocomplete="off" /></label>
+        <label>占位传感器地址 · 从 0 计<input id="p-binding-sensor" type="number" min="0" max="65535" step="1" required /></label>
+        <label class="p-inline-check"><input id="p-binding-active-high" type="checkbox" /> 高电平表示有箱</label>
+        <label>入口输送带地址 · 从 0 计<input id="p-binding-entry" type="number" min="0" max="65535" step="1" required /></label>
+        <label>输送带地址 · 从 0 计<input id="p-binding-conveyor" type="number" min="0" max="65535" step="1" required /></label>
+      </div></details>
+      <div class="p-integration-footer"><p id="p-integration-message" role="status" aria-live="polite"></p><div class="p-project-dialog-actions"><button id="p-integration-cancel" class="p-button" type="button" data-action="close-integration">取消</button><button id="p-integration-submit" class="p-button" type="submit">保存工程配置</button></div></div>
+    </form>
+  </dialog>
+</div>
+</div>
+</body></html>

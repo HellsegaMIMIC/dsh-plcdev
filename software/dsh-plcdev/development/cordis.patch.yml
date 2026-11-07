@@ -1,0 +1,7 @@
+- insert:
+    - id: plcdev-development-model
+      name: dsh-plcdev-development
+      config:
+        scopeFile: !!js process.env.PLCDEV_DSH_DEVELOPMENT_SCOPE
+        python: !!js process.env.PLCDEV_DSH_DEVELOPMENT_PYTHON
+        broker: !!js process.env.PLCDEV_DSH_DEVELOPMENT_BROKER

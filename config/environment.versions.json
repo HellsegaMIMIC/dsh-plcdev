@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "platform": "win32",
+  "tools": {
+    "editor": {
+      "files": {
+        "executable": {
+          "sha256": "780bdf19079b67f9324631378d2985e80c4f9993ab50b6f50605685143065504"
+        },
+        "archive": {
+          "sha256": "8af479b6895dbe57ba26ae8fd4d853bb31d58f35ee37d9edc58c4cd043cced60"
+        }
+      },
+      "sourceVersion": "4.3.2"
+    },
+    "runtime": {
+      "files": {
+        "version": {
+          "sha256": "a147f40238b41d45941fd70b698d8545240f62f9297b4ccd1ae138d60d9b13f1"
+        },
+        "core": {
+          "sha256": "829311bdf99339de6612f681a73add3698384ded8a81ae991b6e42279d4e5e47"
+        },
+        "programBuild": {
+          "sha256": "69094270809362c908afdb026b31ae46a1c92190364057fb20bcf0f51e7d96be"
+        }
+      },
+      "version": "v4.3.0"
+    },
+    "msys": {
+      "files": {
+        "bash": {
+          "sha256": "7b4dc5d6878aacdec5d09ca9c5d8e2b43b925a6bbf631873a24c692980b792b2"
+        },
+        "g++": {
+          "sha256": "70f58c1d17d8362e4268bb18f4b0733bf8f0f2ee2c693986aa6250fb5772309e"
+        },
+        "cmake": {
+          "sha256": "cb75c3b05540e8814b125912168c986ff5512e03f7fce22c91f8b9afaa1132d1"
+        }
+      },
+      "compilerVersion": "g++ (GCC) 15.3.0",
+      "cmakeVersion": "cmake version 4.4.4"
+    },
+    "node": {
+      "files": {
+        "executable": {
+          "sha256": "98843732431bad6c2c165908bb7dde6fe2a221ddbc491a955d548a2e6ab9ebff"
+        }
+      },
+      "version": "v25.9.0"
+    },
+    "python": {
+      "files": {
+        "executable": {
+          "sha256": "dc7ecf75280678175b4f931ce05f1ef9c10d48984399ca7de6beee69d71bcb1b"
+        }
+      },
+      "version": "Python 3.13.13"
+    },
+    "pythonEnvironment": {
+      "files": {},
+      "pythonVersion": "3.13.13",
+      "packages": {
+        "aiosqlite-0.22.1.dist-info": "cf3c8cc7397687f74602557a3e4f5ce1806591a62c82fe94c9b396fd80d1b39a",
+        "annotated_types-0.8.0.dist-info": "614985b278f601b8ef863f82783b991cc3ada4b89f592eb71c7c48c5f2ef2298",
+        "anyio-4.15.1.dist-info": "043aecb571af7189e8a6c528f5d8e32545f1b2cdfaaf761d51e6d5b67ea3ca81",
+        "certifi-2026.10.23.dist-info": "e463e38f7fe7da36a11e6d3fecc5dfa5b97be8c8022620400750d79ae7d842bc",
+        "charset_normalizer-3.5.2.dist-info": "49e955a09e1a159e0846872798006e8db7d518d8d70c637066fefdb08d3d9f7b",
+        "distro-1.9.0.dist-info": "31632ab2de5591131091b3397bdcdf797718579d85a75186f06839dd0c09e81d",
+        "h11-0.16.0.dist-info": "28f326098ac09fcba79b8f180f96087c841fe2456215cb7b872a9c7d5cd19d64",
+        "httpcore-1.0.9.dist-info": "fe2d4fda6199128978779e0cf27f3c045c531863fcdd987eacc74f3a18d41c21",
+        "httpcore2-2.16.0.dist-info": "c073bd68b2bd543fbc2bab3763b42ed1e70666536d32c1bf39ef2764fd50b0a4",
+        "httpx-0.28.1.dist-info": "febb9b0f8f3e80d57c8199c304f35c4336e8581d1d18d7983c92766b82793b25",
+        "httpx2-2.16.0.dist-info": "192f20046200ff50911a7278c21dfbee1e1a4c6fa7943227afe9231d28defc3f",
+        "idna-3.20.dist-info": "dbd8c14c1e4ca1e0c9824a6dbc7cbbf78884f38eb52d91148cd3025f671e4b85",
+        "jsonpatch-1.38.dist-info": "f8fdfa8679cff1b9fe0618e3da3440565e719b3ed71c4680fe4933f8378093ad",
+        "jsonpointer-3.6.dist-info": "73bbf2049c9c96505efca62787338f88e21ace615652c85d07930a34f81d725d",
+        "langchain_core-1.7.3.dist-info": "fe778ebb823f27acca4e01548f006db33ef72abe24084ba37f44d2a083885c34",
+        "langchain_protocol-0.0.20.dist-info": "18e3ee4b2dd8feefab5c13d254efae6bbfec0c7d793b2422fac5ec3c1c0c15d9",
+        "langgraph-1.2.18.dist-info": "dd30c73a820a681099e79fbd5e20b2319dc3083444ed2a62759c52a2341ce2bd",
+        "langgraph_checkpoint-4.3.1.dist-info": "9e59af41fb620215449b7c13fdb27f3e001379dfe03ca2d799781d29e816c226",
+        "langgraph_checkpoint_sqlite-3.1.2.dist-info": "75d8785ae23af5ba3900412f6de7cf36543e8161b4677dd13b1fb19472e523e1",
+        "langgraph_prebuilt-1.1.1.dist-info": "0c378432b6201dcf4b6641e642ce9f03e353515a155f15501a91fa7cdd401496",
+        "langgraph_sdk-0.4.10.dist-info": "8789a80a6c4060a076debd3e885141025ce77d0586b40cf7bc351d577aa35242",
+        "langsmith-0.14.16.dist-info": "d6d6f76ea46fdfc5666af883fa28f80ed3c5e963909973ce09e9158894ae93be",
+        "orjson-3.13.0.dist-info": "3cf8365d97cf2977c143e4944541056a12138915b806d623ccde70fcd18d1d21",
+        "ormsgpack-1.13.0.dist-info": "eda7f44421484d7c072f4acc38ffa6bf4b0a8b7049587be624abe4d1d7904288",
+        "packaging-26.3.dist-info": "70fdb89fc4d4a9a043bf7372b8972bcc883fddff34ab55e9cf80d73875384763",
+        "pip-26.0.1.dist-info": "66a219b8d1ac1ba97680788a9508d542084542181259f8440c7b8254f5b768df",
+        "pydantic-2.14.2.dist-info": "5e27715d350cc99bc33877404deba2a9491221ae972db8f8c79f64032bee3a01",
+        "pydantic_core-2.50.2.dist-info": "2a6baeaa81c7bd920bd1a326d6f99ac3e6c62f282ff73b90ec782c2053072010",
+        "pyyaml-6.0.3.dist-info": "847a701020334386852b6e07bad1053cb0ce3da9ee1846e7e9d02b24e8bb3f8d",
+        "requests-2.34.2.dist-info": "8c384ba3e979480faae2859d3c5e6c1276dd2c3616e322e124d52c8cfc556f27",
+        "requests_toolbelt-1.0.0.dist-info": "fa52f26237cc8d148d25c5746fdca499a56d0e765e69095cc3564a07cce23967",
+        "sniffio-1.3.1.dist-info": "0b318b57098edeccf585e60a889a6b6a7b5c4086f3a9aa62eff76a1d3cee12d9",
+        "sqlite_vec-0.1.9.dist-info": "2f4bed13a46b85d0456bfc17f37cd327518662eda409a369cd4d9612c790ca90",
+        "tenacity-9.2.1.dist-info": "1d30f0b4cd3cf1ad585400f9ea9c424e64c630ea63e57209a1f16fce72e68eb7",
+        "truststore-0.10.5.dist-info": "1fd496f290853214e630d96f7163d2dd916f84ebe634b58aa827d6853e8f8610",
+        "typing_extensions-4.16.0.dist-info": "b05084ca1d50879865178d9fff9fabeab61bdfb1f361bfbde95421ffc8f9be46",
+        "typing_inspection-0.4.4.dist-info": "bad3d9e6342ef6750cf5128ec942327b8bebdce0b6e4d6f67cb15b27ae5118da",
+        "urllib3-2.8.0.dist-info": "10898c620e8007c030e07fa5622b68358a43010025dfbd78a1cb797699de2bb4",
+        "uuid_utils-0.19.0.dist-info": "5d1844000e1784068d76cbfb5753cfbb968ab68833b96f41139bbebb714d9244",
+        "websockets-17.3.dist-info": "9cc627bf78c7ad38e9679b309498e253ac2591f0a74b692f879c78481e450b72",
+        "xxhash-4.0.2.dist-info": "8b8674c42d586c29ae87e7ae3761dc4193c2bee06ea064ea35c0bedb7d375ce1",
+        "zstandard-0.25.0.dist-info": "bbf8cb63171274854c72777372376d31d7b52447359a538c1c2b47aae49c2b3c"
+      }
+    },
+    "dshCli": {
+      "files": {
+        "entry": {
+          "sha256": "80112efe368efb1a39720c7ada0af00442e5131fb2744edaaff8a3e8bb499e6f"
+        },
+        "manifest": {
+          "sha256": "b10673ea6c4e20cc10da6ef20130b6ece3142cba8003b50e0d5ded25fc388b5b"
+        }
+      },
+      "version": "0.2.1-rc.5"
+    },
+    "fuxaPackage": {
+      "files": {
+        "manifest": {
+          "sha256": "83e08bb5008f3245cb5eeab66d968d072ca22ad63542f593a6dcb975422fa111"
+        },
+        "server": {
+          "sha256": "b4c384fdf558207fd6b39dd2288bd1125cb511786233e0209a6905f7fb5dde45"
+        },
+        "client": {
+          "sha256": "f868229b7d0837f29e99d270ba64c08be4b6bbd094cb6d5a0c457a58df6bc271"
+        }
+      },
+      "version": "1.3.5"
+    },
+    "oipExecutable": {
+      "files": {
+        "executable": {
+          "sha256": "8dd9053423e49b8fe648e770631eeceafdcec1964dc9698478888f4bf63423f7"
+        },
+        "archive": {
+          "sha256": "85ed4309038203daf0fdf885b8c1ca76ce0a34b8d1e920ad58b53b1af3bb1778"
+        }
+      }
+    }
+  },
+  "pluginVersion": "0.5.0"
+}

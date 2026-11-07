@@ -1,0 +1,16 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "type":"object","additionalProperties":false,"required":["schemaVersion","title","width","height","theme","widgets"],
+  "properties":{
+    "schemaVersion":{"const":1},"title":{"type":"string","minLength":1,"maxLength":80},
+    "width":{"type":"integer","minimum":800,"maximum":1600},"height":{"type":"integer","minimum":500,"maximum":1000},
+    "theme":{"type":"object","additionalProperties":false,"required":["background","foreground","accent"],"properties":{"background":{"type":"string","pattern":"^#[0-9A-Fa-f]{6}$"},"foreground":{"type":"string","pattern":"^#[0-9A-Fa-f]{6}$"},"accent":{"type":"string","pattern":"^#[0-9A-Fa-f]{6}$"}}},
+    "widgets":{"type":"array","minItems":8,"maxItems":50,"items":{"type":"object","additionalProperties":false,"required":["id","type","label","x","y","width","height"],"properties":{
+      "id":{"type":"string","pattern":"^[a-z][a-zA-Z0-9_-]{0,39}$"},"type":{"enum":["text","value","button","input"]},"label":{"type":"string","maxLength":100},
+      "x":{"type":"integer","minimum":0},"y":{"type":"integer","minimum":0},"width":{"type":"integer","minimum":40,"maximum":1500},"height":{"type":"integer","minimum":20,"maximum":200},
+      "fontSize":{"type":"integer","minimum":12,"maximum":56},"color":{"type":"string","pattern":"^#[0-9A-Fa-f]{6}$"},
+      "tag":{"enum":["count","target","countDisplay","targetDisplay","phase","quality","remainingDisplay","communication","runtime","commandResult","targetDraft","recoveryDraft"]},
+      "action":{"enum":["target","start","stop","fault","clearFault","reset","newBatch","recover"]}
+    }}}
+  }
+}

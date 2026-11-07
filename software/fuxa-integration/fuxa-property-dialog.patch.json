@@ -1,0 +1,17 @@
+{
+  "id": "PLCDEV_PROPERTY_EVENT_FIX",
+  "package": "@frangoteam/fuxa@1.3.5",
+  "file": "dist/main.e1034e5a0d5bcc79.js",
+  "upstreamSha256": "b2729687bc59d9df5eecd9b07326ebfb3c0112320f5e1e7422d96ea3cfa944f5",
+  "reason": "The native property handler ignores the settings emitted by the actual control, and can silently return if its conditional ViewChild is not populated. Resolve the emitted control through currentView.items first, then the active selection, with the old ViewChild only as fallback.",
+  "replacements": [
+    {
+      "before": "onGaugeEdit(t){this.openEditGauge(this.gaugePanelComponent?.settings,n=>{this.setGaugeSettings(n)})}",
+      "after": "onGaugeEdit(t){this.openEditGauge(this.getGaugeSettings(t||this.selectedElement)||this.gaugePanelComponent?.settings,n=>{this.setGaugeSettings(n)})}"
+    },
+    {
+      "before": "onGaugeEditEx(){setTimeout(()=>{this.gaugePanelComponent.onEdit()},500)}",
+      "after": "onGaugeEditEx(){setTimeout(()=>{this.onGaugeEdit(this.selectedElement)},500)}"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "tools": {
+    "editor": "C:/Tools/OpenPLC-Editor/OpenPLC Editor.exe",
+    "runtime": "C:/Tools/OpenPLC-Runtime/openplc-runtime",
+    "msys": "C:/Tools/OpenPLC-Runtime/msys64",
+    "node": null,
+    "python": null,
+    "pythonEnvironment": ".tools/workbench-agent-venv",
+    "dshCli": ".tools/dsh-host/node_modules/@deepseek-ai/dsh/lib/bin.js",
+    "fuxaPackage": ".tools/fuxa/runtime/node_modules/@frangoteam/fuxa",
+    "oipExecutable": "${LOCALAPPDATA}/Programs/open-industry-project/Open Industry Project.exe"
+  },
+  "state": {
+    "runtimeOwnerDirectory": "C:/PLCdevState/runtime-owner"
+  }
+}

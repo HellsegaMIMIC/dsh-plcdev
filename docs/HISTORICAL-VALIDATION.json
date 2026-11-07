@@ -1,0 +1,33 @@
+{
+  "date": "2026-11-07",
+  "scope": "Maintainer same-machine software checks; raw logs are not distributed. Counts are not additive.",
+  "checks": {
+    "fan-plc-hmi": {
+      "passed": true,
+      "checks": 15,
+      "privateAuditSha256": "37a1725f07936ad3b6411cf3bf6867299b61b055bc0acd9bee5b97b4298ed41b",
+      "reproducedByThisReleasePreparation": false
+    },
+    "same-machine-recovery": {
+      "passed": true,
+      "checks": 20,
+      "privateAuditSha256": "48e1101bef2abdab13caa68ac46c3e7f8901b3d399c44c7536a301d548d3f16a",
+      "reproducedByThisReleasePreparation": false
+    },
+    "conveyor-retain-undo": {
+      "passed": true,
+      "checks": 27,
+      "privateAuditSha256": "0e671a1cb96c21a8ba16dea3fdf92461b93159a3e1e40684eb1873c4e4fd7964",
+      "reproducedByThisReleasePreparation": false
+    },
+    "conveyor-runtime": {
+      "passed": true,
+      "checks": 23,
+      "privateAuditSha256": "b0fe013dfd6b37114c2855150e134de1495676e475ad1a151aca6ca6f5f50201",
+      "reproducedByThisReleasePreparation": false
+    }
+  },
+  "fanOipImplemented": false,
+  "freshMachineInstallVerified": false,
+  "hardwareVerified": false
+}

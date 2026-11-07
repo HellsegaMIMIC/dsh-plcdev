@@ -1,0 +1,10 @@
+{
+  "name": "dsh-plcdev-development",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Scoped PLCdev plugin development model for an isolated DSH profile",
+  "exports": {".": "./index.mjs"},
+  "files": ["index.mjs", "cordis.patch.yml"],
+  "dsh": {"manifestVersion": 1, "bundle": {"patch": "./cordis.patch.yml"}}
+}

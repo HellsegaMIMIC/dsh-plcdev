@@ -1,0 +1,334 @@
+diff --git a/docs/CLI.md b/docs/CLI.md
+index 781a1a0..ef36d52 100644
+--- a/docs/CLI.md
++++ b/docs/CLI.md
+@@ -434,3 +434,33 @@ Targets that build on the device refuse while its PLC is RUNNING, exactly as the
+ editor warns — on-device compilation can stall the build or make the running
+ program miss scan deadlines. `--yes` / `-y` approves stopping it first, the way
+ `apt install -y` does. Nothing stops a running PLC without being asked.
++
++## PLCdev candidate inspection (development bridge)
++
++`openplc-cli agent-candidate --json` is a read-only parent/child protocol for
++an isolated candidate created by the PLCdev task service. It neither connects
++to a running editor nor invokes a model, compiler, Runtime, device, or hardware.
++It does not offer apply, discard, or any write operation.
++
++The trusted parent starts a fresh process with `PLCDEV_AGENT_CANDIDATE_ROOT`
++set to the managed candidate root and `PLCDEV_AGENT_CAPABILITY` set to a newly
++generated 32-byte random token encoded as 64 lowercase hexadecimal characters.
++It writes one UTF-8 JSON request to stdin and closes stdin; the request is at
++most 16 KiB. Fields are `contractVersion` (1), `capability`, `taskId`,
++`projectId`, `candidateId`, `baselineRevision`, and `candidateDigest`. The
++parent must keep the token out of arguments, logs, project files, and receipts.
++A fresh process handles exactly one request; the caller must not reuse tokens.
++This is a parent-controlled local process boundary, not an OS isolation or
++protection against a hostile process running as the same user.
++
++The command checks the capability, confines and resolves the task/candidate
++path, rejects links, checks receipt identity and the baseline, and hashes every
++candidate project file before and after reading the native manifest and PLC
++project. A mismatch fails closed. The result labels the other editor's dirty
++state `unknown`; a separately hydrated headless copy cannot establish whether
++any GUI editor has unsaved buffers. Native manifest checks and digests are not
++compile, GUI edit, model generation, or runtime validation. An unavailable
++or unverifiable live editor state must never be treated as clean for an apply.
++
++The command is currently a source/development build capability; it has not yet
++been connected to the task service or shipped in the existing trial package.
+diff --git a/src/cli/main.ts b/src/cli/main.ts
+index 9b389f7..0d80827 100644
+--- a/src/cli/main.ts
++++ b/src/cli/main.ts
+@@ -20,7 +20,7 @@
+  * not waiting is what lets the CLI run on a machine with no display.
+  */
+ 
+-import { readFileSync } from 'node:fs'
++import { readFileSync, readSync } from 'node:fs'
+ import { dirname, join } from 'node:path'
+ 
+ import { RuntimeApiClient } from '@root/backend/editor/runtime/runtime-api-client'
+@@ -31,6 +31,7 @@ import { app } from 'electron'
+ import { boolFlag, parseArgs, type ParsedArgs, stringFlag } from './args'
+ import { cliArgv } from './argv'
+ import { buildProject, runBuild } from './commands/build'
++import { CandidateBridgeError, inspectCandidate, renameBatchCount } from './commands/agent-candidate'
+ import { runCreate } from './commands/create'
+ import { type DebugContext, runDebug } from './commands/debug'
+ import { runDevices } from './commands/devices'
+@@ -90,6 +91,7 @@ Usage
+   openplc-cli debug close --session <id> | --all [--keep-forces]
+   openplc-cli debug repl [--session <id>]                       (interactive; needs a terminal)
+   openplc-cli debug exec [script|-] [--session <id>] [--keep-going]  (one command per line)
++  openplc-cli agent-candidate                               (local parent/child read-only protocol on stdin)
+ 
+ Confirmation
+   Builds on a device-side target refuse while its PLC is RUNNING, as the editor warns.
+@@ -206,6 +208,10 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
+       return (await runBuild(args, reporter, { withUpload: true })).exitCode
+     case 'debug':
+       return (await runDebug(args, reporter, buildDebugContext())).exitCode
++    case 'agent-candidate':
++      return runAgentCandidate(reporter).exitCode
++    case 'agent-candidate-rename':
++      return runAgentCandidate(reporter, true).exitCode
+     default:
+       // Print the usage as well as the error: a mistyped command is the moment
+       // the list of real commands is most useful, and hunting for --help is a
+@@ -218,6 +224,32 @@ async function dispatch(args: ParsedArgs, reporter: Reporter): Promise<ExitCodeV
+   }
+ }
+ 
++/** One bounded request. A new process gets a new transient parent capability. */
++function runAgentCandidate(reporter: Reporter, rename = false): { exitCode: ExitCodeValue } {
++  try {
++    const buffer = new Uint8Array(16385)
++    let used = 0
++    for (;;) {
++      const count = readSync(0, buffer, used, buffer.length - used, null)
++      if (count === 0) break
++      used += count
++      if (used === buffer.length) throw new CandidateBridgeError('invalid', 'Request exceeds 16 KiB')
++    }
++    const request: unknown = JSON.parse(Buffer.from(buffer.buffer, buffer.byteOffset, used).toString('utf8'))
++    const action = rename ? renameBatchCount : inspectCandidate
++    const result = action(process.env.PLCDEV_AGENT_CANDIDATE_ROOT ?? '', process.env.PLCDEV_AGENT_CAPABILITY ?? '', request)
++    return reporter.success(result, () => 'Candidate identity and saved-file digest verified; editor state remains unknown.')
++  } catch (error) {
++    if (error instanceof CandidateBridgeError) {
++      const code = error.kind === 'auth' ? ErrorCode.AuthRejected : error.kind === 'invalid' ? ErrorCode.InvalidArgument : ErrorCode.TargetError
++      const status = error.kind === 'auth' ? ExitCode.Auth : error.kind === 'invalid' ? ExitCode.Usage : ExitCode.TargetError
++      return reporter.failure({ code, message: error.message, details: { kind: error.kind } }, status)
++    }
++    // Never include request content, paths, env vars, tokens, or raw I/O errors.
++    return reporter.failure({ code: ErrorCode.InvalidArgument, message: 'Could not inspect candidate request.' }, ExitCode.Usage)
++  }
++}
++
+ function buildDebugContext(): DebugContext {
+   const dir = registryDir()
+   return {
+diff --git a/src/frontend/components/_templates/app-layout.tsx b/src/frontend/components/_templates/app-layout.tsx
+index bd34b75..2237408 100644
+--- a/src/frontend/components/_templates/app-layout.tsx
++++ b/src/frontend/components/_templates/app-layout.tsx
+@@ -1,6 +1,7 @@
+ import { ComponentPropsWithoutRef, ReactNode, useCallback, useEffect, useState } from 'react'
+ 
+-import { useCapabilities, useProject, useSystem, useTheme } from '../../../middleware/shared/providers'
++import { useCapabilities, useProject, useSystem, useTheme, useWindow } from '../../../middleware/shared/providers'
++import { useAgentEditorEvidence } from '../../hooks/use-agent-editor-evidence'
+ import { useOpenPLCStore } from '../../store'
+ import type { RungLadderState } from '../../store/slices/ladder'
+ import type { CreateGraphicalVariableModalData } from '../../store/slices/modal/types'
+@@ -45,6 +46,8 @@ const AppLayout = ({ children, ...rest }: AppLayoutProps): ReactNode => {
+   const system = useSystem()
+   const projectPort = useProject()
+   const caps = useCapabilities()
++  const windowPort = useWindow()
++  useAgentEditorEvidence(windowPort)
+   const [showComponent, setShowComponent] = useState(true)
+   const modals = useOpenPLCStore(useCallback((s) => s.modals, []))
+   // Narrowed once, not asserted three times. The store keeps every modal's data
+diff --git a/src/frontend/utils/PLC/__tests__/pou-text-parser.test.ts b/src/frontend/utils/PLC/__tests__/pou-text-parser.test.ts
+index 86e2c5d..6392760 100644
+--- a/src/frontend/utils/PLC/__tests__/pou-text-parser.test.ts
++++ b/src/frontend/utils/PLC/__tests__/pou-text-parser.test.ts
+@@ -1,4 +1,5 @@
+ import * as iecStringModule from '../../generate-iec-string-to-variables'
++import { serializeTextualPouToString } from '../pou-text-serializer'
+ import {
+   detectLanguageFromExtension,
+   findGraphicalBodyStartIndex,
+@@ -687,6 +688,24 @@ describe('findLastEndVarIndex with an upper bound', () => {
+ describe('extractVariablesSection and the POU header', () => {
+   const textOf = (content: string) => parseTextualPouFromString(content, 'st', 'program')
+ 
++  it.each([
++    '(* Declaration notes *)',
++    '(* VAR_OUTPUT and END_VAR are documentation, not delimiters *)',
++    '(* outer (* VAR_INPUT *) END_VAR *)',
++    '// VAR_OUTPUT and END_VAR are documentation',
++  ])('preserves the pre-declaration comment and all variables on repeated save/reopen: %s', (comment) => {
++    const declarations = Array.from({ length: 25 }, (_, n) => `  value${n} : INT;`).join('\n')
++    const source = `FUNCTION_BLOCK Batch\n${comment}\nVAR_INPUT\n${declarations}\nEND_VAR\nvalue0 := 5;\nEND_FUNCTION_BLOCK`
++    const first = parseTextualPouFromString(source, 'st', 'function-block')
++    expect(first.interface?.variables).toHaveLength(25)
++    const saved = serializeTextualPouToString(first)
++    expect(saved).toContain(comment)
++    expect(saved).toContain('value0 := 5;')
++    const reopened = parseTextualPouFromString(saved, 'st', 'function-block')
++    expect(reopened.interface?.variables).toEqual(first.interface?.variables)
++    expect(serializeTextualPouToString(reopened)).toBe(saved)
++  })
++
+   it('leaves a header sharing the VAR line out of the declarations', () => {
+     const pou = textOf('PROGRAM main VAR\n  a : INT;\nEND_VAR\n  a := 1;\nEND_PROGRAM\n')
+ 
+diff --git a/src/frontend/utils/PLC/pou-text-parser.ts b/src/frontend/utils/PLC/pou-text-parser.ts
+index 2a7cf3d..cf78f8d 100644
+--- a/src/frontend/utils/PLC/pou-text-parser.ts
++++ b/src/frontend/utils/PLC/pou-text-parser.ts
+@@ -1,6 +1,7 @@
+ import type { PLCPou, PLCVariable, PouType } from '../../../middleware/shared/ports/types'
+ import { parseIecStringToVariables } from '../generate-iec-string-to-variables'
+ import { getLanguageFromExtension } from './pou-file-extensions'
++import { blankTrivia } from './variable-declarations'
+ 
+ /**
+  * Helper function to extract documentation from leading comments
+@@ -88,7 +89,7 @@ export const findGraphicalBodyStartIndex = (content: string, fromIndex: number):
+  * @returns The index after the last END_VAR, or -1 if not found
+  */
+ export const findLastEndVarIndex = (content: string, startIndex: number, stopAtIndex?: number): number => {
+-  const region = stopAtIndex === undefined ? content : content.slice(0, stopAtIndex)
++  const region = blankTrivia(stopAtIndex === undefined ? content : content.slice(0, stopAtIndex))
+   let lastEndVarIndex = -1
+   let searchIndex = startIndex
+ 
+@@ -165,8 +166,12 @@ export const extractVariablesSection = (
+   bodyStartIndex: number,
+   options: { boundAtGraphicalBody?: boolean } = {},
+ ): { text: string; bodyStartIndex: number } => {
+-  const varStartIndex = content.search(/\b(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\b/i)
+-  if (varStartIndex === -1) return { text: '', bodyStartIndex }
++  const scanned = blankTrivia(content)
++  const relativeStart = scanned
++    .slice(bodyStartIndex)
++    .search(/\b(VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_EXTERNAL|VAR_TEMP|VAR_GLOBAL|VAR)\b/i)
++  if (relativeStart === -1) return { text: '', bodyStartIndex }
++  const varStartIndex = bodyStartIndex + relativeStart
+ 
+   const graphicalBodyStart = options.boundAtGraphicalBody ? findGraphicalBodyStartIndex(content, varStartIndex) : -1
+   const lastEndVarIndex = findLastEndVarIndex(
+@@ -183,7 +188,16 @@ export const extractVariablesSection = (
+   // an unparsed fallback, and the next save wrote its header twice.
+   const lineStart = content.lastIndexOf('\n', varStartIndex) + 1
+   const indent = content.slice(lineStart, varStartIndex)
+-  const from = /^[ \t]*$/.test(indent) ? lineStart : varStartIndex
++  let from = /^[ \t]*$/.test(indent) ? lineStart : varStartIndex
++  // Comments between the header and declarations belong to the declaration
++  // text too. Scan without trivia to avoid treating documented VAR/END_VAR as
++  // delimiters, but retain the original bytes when saving. The serializer
++  // already emits the header's line break, so do not accumulate one per save.
++  const prefix = content.slice(bodyStartIndex, varStartIndex)
++  if (prefix.trim() && !scanned.slice(bodyStartIndex, varStartIndex).trim()) {
++    const lineBreak = content.slice(bodyStartIndex).match(/^\r?\n/)
++    from = bodyStartIndex + (lineBreak?.[0].length ?? 0)
++  }
+   return { text: content.slice(from, lastEndVarIndex), bodyStartIndex: lastEndVarIndex }
+ }
+ 
+diff --git a/src/main/modules/ipc/main.ts b/src/main/modules/ipc/main.ts
+index 4e0509d..8addda3 100644
+--- a/src/main/modules/ipc/main.ts
++++ b/src/main/modules/ipc/main.ts
+@@ -168,6 +168,7 @@ import {
+   type PluginCommandOutcome,
+ } from '../../../backend/shared/utils/vpp/screen-actions'
+ import { describeDebugEndpoint } from '../../../middleware/shared/utils/debug-endpoint'
++import { AgentEditorEvidenceIpc } from './agent-editor-evidence'
+ 
+ /** Why a channel could not be handed out. */
+ interface ChannelUnavailable {
+@@ -276,6 +277,7 @@ class MainProcessBridge implements MainIpcModule {
+   quitCoordinator
+   private quitPromptReady = false
+   private reloadConfirmed = false
++  private agentEditorEvidence?: AgentEditorEvidenceIpc
+   private registeredHandleChannels: string[] = []
+   // ONE session for a baremetal device, whatever media it runs over; nothing else here opens a
+   // Modbus client. The runtime-v4 WebSocket is a different protocol and keeps its own session.
+@@ -342,12 +344,15 @@ class MainProcessBridge implements MainIpcModule {
+     this.quitCoordinator = quitCoordinator
+     this.mainWindow?.webContents?.on('render-process-gone', () => {
+       this.quitPromptReady = false
++      this.agentEditorEvidence?.invalidate()
+     })
+     this.mainWindow?.webContents?.on('did-start-navigation', ({ isMainFrame, isSameDocument }) => {
+       if (!isMainFrame || isSameDocument) return
++      this.agentEditorEvidence?.invalidate()
+       this.quitPromptReady = false
+       this.reloadConfirmed = false
+     })
++    this.mainWindow?.webContents?.on('destroyed', () => this.agentEditorEvidence?.dispose())
+     // The renderer's beforeunload blocks every unload it did not ask for; a confirmed reload is let through.
+     this.mainWindow?.webContents?.on('will-prevent-unload', (event) => {
+       if (this.reloadConfirmed) event.preventDefault()
+@@ -851,6 +856,15 @@ class MainProcessBridge implements MainIpcModule {
+ 
+   setupMainIpcListener() {
+     this.cleanupHandlers()
++    this.agentEditorEvidence?.dispose()
++    const projectFlag = process.argv.indexOf('--plcdev-project')
++    if (this.mainWindow?.webContents) {
++      this.agentEditorEvidence = new AgentEditorEvidenceIpc(
++        this.ipcMain,
++        this.mainWindow.webContents,
++        projectFlag >= 0 && Boolean(process.argv[projectFlag + 1]),
++      )
++    }
+ 
+     // Project-related handlers
+     this.registerHandle('project:create', this.handleProjectCreate)
+@@ -1092,6 +1106,10 @@ class MainProcessBridge implements MainIpcModule {
+     this.registerHandle('file:read-content', this.handleFileReadContent)
+   }
+ 
++  /** Local main-process API only; not registered on any IPC or network route. */
++  requestAgentEditorEvidence = () =>
++    this.agentEditorEvidence?.request() ?? Promise.resolve({ editState: 'unknown', complete: false, scope: 'single-renderer' })
++
+   // ===================== HANDLER METHODS =====================
+   // Project-related handlers
+   handleProjectCreate = async (_event: IpcMainInvokeEvent, data: CreateProjectFileProps) => {
+diff --git a/src/main/modules/ipc/renderer.ts b/src/main/modules/ipc/renderer.ts
+index f455d5b..3518986 100644
+--- a/src/main/modules/ipc/renderer.ts
++++ b/src/main/modules/ipc/renderer.ts
+@@ -123,6 +123,17 @@ type CompilerPortMessage = {
+  * Provides various methods for handling project creation, opening, saving, and other operations.
+  */
+ const rendererProcessBridge = {
++  onAgentEditorEvidenceRequest: (callback: () => 'unsaved' | 'unknown'): (() => void) =>
++    subscribe('agent-editor:evidence-request', (_event, nonce) => {
++      if (typeof nonce !== 'string' || !/^[0-9a-f-]{36}$/i.test(nonce)) return
++      let state: 'unsaved' | 'unknown' = 'unknown'
++      try {
++        if (callback() === 'unsaved') state = 'unsaved'
++      } catch {
++        // An unavailable or failing renderer must never be treated as clean.
++      }
++      ipcRenderer.send('agent-editor:evidence-response', nonce, state)
++    }),
+   localRuntimeCompile: (args: LocalRuntimeCompileArgs): Promise<LocalRuntimeSnapshot> =>
+     ipcRenderer.invoke('local-runtime:compile', args),
+   localRuntimeCommand: (args: LocalRuntimeCommandArgs): Promise<LocalRuntimeSnapshot> =>
+diff --git a/src/middleware/adapters/editor/window-adapter.ts b/src/middleware/adapters/editor/window-adapter.ts
+index 008471f..de2d00d 100644
+--- a/src/middleware/adapters/editor/window-adapter.ts
++++ b/src/middleware/adapters/editor/window-adapter.ts
+@@ -26,6 +26,9 @@ import type { WindowPort } from '../../shared/ports/window-port'
+ 
+ export function createEditorWindowAdapter(): WindowPort {
+   return {
++    onAgentEditorEvidenceRequest(callback: () => 'unsaved' | 'unknown'): Unsubscribe {
++      return window.bridge.onAgentEditorEvidenceRequest(callback)
++    },
+     minimize(): void {
+       window.bridge.minimizeWindow()
+     },
+diff --git a/src/middleware/shared/ports/window-port.ts b/src/middleware/shared/ports/window-port.ts
+index 7ca5165..03d39d0 100644
+--- a/src/middleware/shared/ports/window-port.ts
++++ b/src/middleware/shared/ports/window-port.ts
+@@ -26,6 +26,8 @@
+ import type { Unsubscribe } from './types'
+ 
+ export interface WindowPort {
++  /** Answer a local main-process evidence request; never returns clean. */
++  onAgentEditorEvidenceRequest?(callback: () => 'unsaved' | 'unknown'): Unsubscribe
+   /** Minimize the application window. No-op on web. */
+   minimize(): void
+ 

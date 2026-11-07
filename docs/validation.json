@@ -1,0 +1,67 @@
+{
+  "date": "2026-11-07",
+  "passed": true,
+  "scope": "Staged source tree; cached npm install, build, offline protocol/UI tests and source audit.",
+  "checks": [
+    {
+      "check": "npm-offline-install",
+      "exitCode": 0,
+      "testCount": null,
+      "logSha256": "e9067d4d73d439ea568e2c5e6a96766c5cf4768365ec81e63a1969b579f04ca8"
+    },
+    {
+      "check": "plugin-build",
+      "exitCode": 0,
+      "testCount": null,
+      "logSha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "check": "plugin-tests",
+      "exitCode": 0,
+      "testCount": 188,
+      "logSha256": "a15fd9a0ac83393407740719307ffd7f4921d740d853cb8cfec914c94f0c2ec0"
+    },
+    {
+      "check": "project_interface",
+      "exitCode": 0,
+      "testCount": 25,
+      "logSha256": "fdb65a39139cc034a84f22c239823445d2f58f40560271d973ac583c827274c1"
+    },
+    {
+      "check": "plcdev_environment",
+      "exitCode": 0,
+      "testCount": 8,
+      "logSha256": "38ee4f42c7bf098dbe251cb6b37f70c6bac26594532633e45f1cbc3567c68d87"
+    },
+    {
+      "check": "workbench_empty_catalog",
+      "exitCode": 0,
+      "testCount": 3,
+      "logSha256": "9857006f04090d95e7715c7793520fc5570257978dec299f8ac378215210cdf6"
+    },
+    {
+      "check": "verify_source_release",
+      "exitCode": 0,
+      "testCount": 4,
+      "logSha256": "9260a239492d985954f177010a873944796f5ff971d65ea04479ea3d1f65399c"
+    },
+    {
+      "check": "workbench_fuxa_oip",
+      "exitCode": 0,
+      "testCount": 28,
+      "logSha256": "aa44f2196cfcf7d694c841a05730520a43808b7833dcf65059069c50cafb2d54"
+    },
+    {
+      "check": "source-audit",
+      "exitCode": 0,
+      "testCount": null,
+      "logSha256": "83ddf78b80d765dc177eb74a02655e36f950d6011a6e13a7e4248aee730b5273"
+    }
+  ],
+  "examplesIncluded": false,
+  "modelCalls": 0,
+  "runtimeStarted": false,
+  "freshMachineFullInstallVerified": false,
+  "testedPluginEntrySha256": "f1a818e1ffac1e739ff7acead311d5f3b00506bd7bdb37377f135ee9d211c0a8",
+  "privateLogsIncluded": false
+}

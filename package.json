@@ -1,0 +1,21 @@
+{
+  "name": "dsh-plcdev-source",
+  "version": "0.5.0",
+  "license": "GPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node software/dsh-plcdev/build.mjs",
+    "test": "node --test software/dsh-plcdev/tests/*.test.mjs",
+    "audit:source": "python tools/verify_source_release.py ."
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "jsdom": "22.1.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}

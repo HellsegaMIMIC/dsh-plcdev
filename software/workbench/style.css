@@ -1,0 +1,573 @@
+
+#plcdev-workbench-refined{--p-bg:light-dark(#f4f6f8,#161c24);--p-surface:light-dark(#fff,#202832);--p-ink:light-dark(#253440,#e4ecf3);--p-muted:light-dark(#63717e,#a5b2bf);--p-line:light-dark(#dce2e7,#3c4754);--p-teal:light-dark(#126d68,#88ddd0);--p-tint:light-dark(#edf6f4,#203b3a);--p-button:light-dark(#186f69,#88ddd0);--p-onbutton:light-dark(#fff,#112d28);--p-ok:light-dark(#247144,#87d6a3);--p-okbg:light-dark(#edf7ef,#253b2d);--p-warn:light-dark(#955609,#efbb75);--p-warnbg:light-dark(#fff4e3,#403221);--p-soft:light-dark(#eef1f4,#2d3742);font:13px/1.5 system-ui,"Microsoft YaHei",sans-serif;color:var(--p-ink);min-width:0;}
+#plcdev-workbench-refined *{box-sizing:border-box;}
+#plcdev-workbench-refined [hidden]{display:none!important;}
+#plcdev-workbench-refined button,#plcdev-workbench-refined select{font:inherit;color:inherit;}
+#plcdev-workbench-refined button{max-width:100%;}
+#plcdev-workbench-refined svg{flex:none;}
+#plcdev-workbench-refined .p-window{background:var(--p-bg);border:1px solid var(--p-line);border-radius:12px;}
+#plcdev-workbench-refined .p-chrome{display:flex;align-items:center;gap:10px;padding:15px 114px 15px 22px;background:var(--p-surface);border-radius:12px 12px 0 0;border-bottom:1px solid var(--p-line);flex-wrap:wrap;}
+#plcdev-workbench-refined .p-brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:16px;letter-spacing:.02em;}
+#plcdev-workbench-refined .p-brand-mark{display:grid;place-items:center;width:30px;height:30px;border-radius:7px;background:var(--p-button);color:var(--p-onbutton);}
+#plcdev-workbench-refined .p-chrome-label{border-left:1px solid var(--p-line);padding-left:12px;color:var(--p-muted);}
+#plcdev-workbench-refined .p-prototype{font-size:11px;color:var(--p-muted);margin-left:auto;white-space:nowrap;}
+#plcdev-workbench-refined .p-context{padding:16px 22px;display:flex;align-items:center;gap:12px;background:var(--p-surface);border-bottom:1px solid var(--p-line);flex-wrap:wrap;}
+#plcdev-workbench-refined .p-folder{color:var(--p-teal);display:flex;}
+#plcdev-workbench-refined .p-picker{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1;}
+#plcdev-workbench-refined .p-picker label{color:var(--p-muted);font-size:11px;}
+#plcdev-workbench-refined .p-picker select{background:var(--p-surface);border:0;border-bottom:1px solid var(--p-line);border-radius:3px;font-size:17px;font-weight:600;padding:3px 22px 3px 0;width:100%;max-width:330px;}
+#plcdev-workbench-refined .p-context-meta{display:flex;gap:10px;align-items:center;color:var(--p-muted);font-size:12px;flex-wrap:wrap;}
+#plcdev-workbench-refined .p-button{border:1px solid var(--p-line);border-radius:6px;background:var(--p-surface);padding:7px 11px;display:inline-flex;gap:7px;align-items:center;justify-content:center;min-height:34px;}
+#plcdev-workbench-refined .p-button:hover{background:var(--p-tint);}
+#plcdev-workbench-refined .p-button[data-emphasis="primary"]{background:var(--p-button);border-color:var(--p-button);color:var(--p-onbutton);}
+#plcdev-workbench-refined .p-button:disabled{opacity:.55;cursor:wait;}
+#plcdev-workbench-refined .p-icon-button{border:0;background:transparent;border-radius:5px;width:32px;min-height:32px;padding:7px;display:inline-flex;align-items:center;justify-content:center;color:var(--p-muted);}
+#plcdev-workbench-refined .p-icon-button:hover{background:var(--p-tint);color:var(--p-teal);}
+#plcdev-workbench-refined .p-work{padding:18px 22px 20px;}
+#plcdev-workbench-refined .p-work-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+#plcdev-workbench-refined h2,#plcdev-workbench-refined h3,#plcdev-workbench-refined p{margin:0;}
+#plcdev-workbench-refined h2{font-size:14px;font-weight:600;}
+#plcdev-workbench-refined .p-health{border:0;background:transparent;padding:3px 0;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--p-muted);}
+#plcdev-workbench-refined .p-health[data-tone="ok"]{color:var(--p-ok);}
+#plcdev-workbench-refined .p-health[data-tone="warn"]{color:var(--p-warn);}
+#plcdev-workbench-refined .p-graph{display:grid;grid-template-columns:minmax(0,1fr) 65px minmax(0,1fr) 65px minmax(0,1fr);grid-template-areas:"eez . plc . note" "generate . load . note" "hmi variables runtime io fio";align-items:stretch;}
+#plcdev-workbench-refined .p-node{position:relative;background:var(--p-surface);border:1px solid var(--p-line);border-radius:9px;min-width:0;}
+#plcdev-workbench-refined .p-node[data-node="eez"]{grid-area:eez;}
+#plcdev-workbench-refined .p-node[data-node="plc"]{grid-area:plc;}
+#plcdev-workbench-refined .p-node[data-node="hmi"]{grid-area:hmi;}
+#plcdev-workbench-refined .p-node[data-node="runtime"]{grid-area:runtime;}
+#plcdev-workbench-refined .p-node[data-node="fio"]{grid-area:fio;}
+#plcdev-workbench-refined .p-node[data-selected="true"]{border-color:var(--p-teal);box-shadow:0 0 0 1px var(--p-teal);}
+#plcdev-workbench-refined .p-node[data-unconfigured="true"]{background:var(--p-bg);border-style:dashed;}
+#plcdev-workbench-refined .p-node-main{width:100%;border:0;border-radius:9px;background:transparent;text-align:left;padding:17px 15px 13px;display:flex;flex-direction:column;align-items:flex-start;gap:11px;}
+#plcdev-workbench-refined .p-node-main:hover{background:var(--p-tint);}
+#plcdev-workbench-refined .p-node-title{display:flex;align-items:center;gap:10px;min-width:0;padding-right:17px;}
+#plcdev-workbench-refined .p-symbol{width:34px;height:34px;border-radius:7px;background:var(--p-soft);color:var(--p-muted);display:grid;place-items:center;flex:none;}
+#plcdev-workbench-refined .p-node[data-node="runtime"] .p-symbol{color:var(--p-teal);background:var(--p-tint);}
+#plcdev-workbench-refined .p-names{min-width:0;}
+#plcdev-workbench-refined .p-name{font-size:14px;font-weight:600;display:block;overflow-wrap:anywhere;}
+#plcdev-workbench-refined .p-role{font-size:11px;color:var(--p-muted);display:block;margin-top:1px;}
+#plcdev-workbench-refined .p-launch{position:absolute;right:5px;top:7px;}
+#plcdev-workbench-refined .p-state{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--p-muted);min-height:21px;}
+#plcdev-workbench-refined .p-state[data-tone="ok"]{color:var(--p-ok);}
+#plcdev-workbench-refined .p-state[data-tone="warn"]{color:var(--p-warn);}
+#plcdev-workbench-refined .p-file{display:none;font-size:11px;color:var(--p-muted);overflow-wrap:anywhere;}
+#plcdev-workbench-refined[data-files="true"] .p-file{display:block;}
+#plcdev-workbench-refined .p-edge{display:flex;align-items:center;justify-content:center;position:relative;min-width:0;}
+#plcdev-workbench-refined .p-edge:before{content:"";position:absolute;background:var(--p-line);}
+#plcdev-workbench-refined .p-edge[data-kind="delivery"]{min-height:66px;}
+#plcdev-workbench-refined .p-edge[data-kind="delivery"]:before{height:100%;width:1px;}
+#plcdev-workbench-refined .p-edge[data-kind="communication"]:before{height:1px;width:100%;}
+#plcdev-workbench-refined .p-edge[data-tone="ok"]:before{background:var(--p-ok);}
+#plcdev-workbench-refined .p-edge[data-tone="warn"]:before{background:var(--p-warn);}
+#plcdev-workbench-refined .p-edge[data-edge="generate"]{grid-area:generate;}
+#plcdev-workbench-refined .p-edge[data-edge="load"]{grid-area:load;}
+#plcdev-workbench-refined .p-edge[data-edge="variables"]{grid-area:variables;}
+#plcdev-workbench-refined .p-edge[data-edge="io"]{grid-area:io;}
+#plcdev-workbench-refined .p-edge-button{z-index:1;border:1px solid transparent;background:var(--p-bg);border-radius:6px;padding:4px 5px;display:flex;align-items:center;justify-content:center;gap:5px;font-size:11px;max-width:100%;color:var(--p-muted);}
+#plcdev-workbench-refined .p-edge[data-kind="communication"] .p-edge-button{flex-direction:column;gap:2px;}
+#plcdev-workbench-refined .p-edge[data-tone="ok"] .p-edge-button{color:var(--p-ok);}
+#plcdev-workbench-refined .p-edge[data-tone="warn"] .p-edge-button{color:var(--p-warn);background:var(--p-warnbg);}
+#plcdev-workbench-refined .p-edge-button:hover,#plcdev-workbench-refined .p-edge-button[aria-pressed="true"]{border-color:var(--p-teal);}
+#plcdev-workbench-refined .p-legend{grid-area:note;display:flex;flex-direction:column;justify-content:center;gap:13px;padding:5px 6px 20px 12px;color:var(--p-muted);font-size:11px;}
+#plcdev-workbench-refined .p-legend span{display:flex;align-items:center;gap:8px;}
+#plcdev-workbench-refined .p-legend .p-legend-caption{margin-top:3px;display:block;max-width:150px;}
+#plcdev-workbench-refined .p-inspector{margin-top:18px;background:var(--p-surface);border:1px solid var(--p-line);border-radius:8px;padding:14px 15px;}
+#plcdev-workbench-refined .p-inspector-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+#plcdev-workbench-refined .p-inspector h3{font-size:14px;font-weight:600;}
+#plcdev-workbench-refined .p-inspector-head small{font-size:11px;color:var(--p-muted);margin-left:auto;}
+#plcdev-workbench-refined .p-fields{display:flex;gap:12px 28px;flex-wrap:wrap;margin:0;}
+#plcdev-workbench-refined .p-fields div{min-width:140px;flex:1;}
+#plcdev-workbench-refined .p-fields dt{font-size:11px;color:var(--p-muted);}
+#plcdev-workbench-refined .p-fields dd{margin:3px 0 0;font-size:12px;overflow-wrap:anywhere;}
+#plcdev-workbench-refined .p-detail-bottom{margin-top:12px;display:flex;gap:15px;align-items:center;justify-content:space-between;flex-wrap:wrap;}
+#plcdev-workbench-refined .p-detail-note{font-size:12px;color:var(--p-muted);flex:1;min-width:180px;}
+#plcdev-workbench-refined .p-detail-bottom[data-tone="warn"] .p-detail-note{color:var(--p-warn);}
+#plcdev-workbench-refined .p-issue-list{display:flex;gap:8px;flex-wrap:wrap;}
+#plcdev-workbench-refined .p-session{background:var(--p-surface);border-top:1px solid var(--p-line);padding:15px 22px;display:flex;align-items:center;gap:13px;flex-wrap:wrap;}
+#plcdev-workbench-refined .p-session-icon{display:flex;color:var(--p-muted);}
+#plcdev-workbench-refined .p-session-info{flex:1;min-width:160px;}
+#plcdev-workbench-refined .p-session-title{display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap;}
+#plcdev-workbench-refined .p-session-id{font-weight:600;}
+#plcdev-workbench-refined .p-session-target{display:block;font-size:11px;color:var(--p-muted);margin-top:4px;}
+#plcdev-workbench-refined .p-execution{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border-radius:4px;background:var(--p-soft);color:var(--p-muted);font-size:11px;}
+#plcdev-workbench-refined .p-execution[data-running="true"]{color:var(--p-ok);background:var(--p-okbg);}
+#plcdev-workbench-refined .p-session-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+#plcdev-workbench-refined .p-end{margin:0 22px 14px;border:1px solid var(--p-line);padding:12px 14px;border-radius:7px;background:var(--p-surface);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;}
+#plcdev-workbench-refined .p-end span{font-size:12px;}
+#plcdev-workbench-refined .p-end small{color:var(--p-muted);display:block;font-size:11px;margin-top:3px;}
+#plcdev-workbench-refined .p-other{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:10px 22px;border-top:1px solid var(--p-line);font-size:11px;color:var(--p-muted);}
+#plcdev-workbench-refined .p-other button{display:inline-flex;gap:6px;align-items:center;padding:4px 8px;background:var(--p-surface);border:1px solid var(--p-line);border-radius:5px;font-size:11px;color:var(--p-ink);}
+#plcdev-workbench-refined .p-other button:hover{background:var(--p-tint);}
+#plcdev-workbench-refined .p-feedback{font-size:12px;padding:10px 22px;border-top:1px solid var(--p-line);color:var(--p-muted);overflow-wrap:anywhere;}
+#plcdev-workbench-refined[data-density="compact"] .p-node-main{padding-top:12px;padding-bottom:10px;gap:7px;}
+#plcdev-workbench-refined[data-density="compact"] .p-edge[data-kind="delivery"]{min-height:54px;}
+@media(max-width:800px){#plcdev-workbench-refined .p-graph{grid-template-columns:minmax(0,1fr) 49px minmax(0,1fr) 49px minmax(0,1fr);}#plcdev-workbench-refined .p-node-title{flex-direction:column;align-items:flex-start;gap:7px;padding-right:0;}#plcdev-workbench-refined .p-node-main{padding:13px 10px;}#plcdev-workbench-refined .p-name{font-size:13px;}#plcdev-workbench-refined .p-legend{padding-left:4px;}#plcdev-workbench-refined .p-picker select{font-size:15px;}}
+@media(max-width:590px){#plcdev-workbench-refined .p-chrome{padding-left:14px;gap:6px;}#plcdev-workbench-refined .p-chrome-label{font-size:12px;}#plcdev-workbench-refined .p-prototype{margin-left:0;flex-basis:100%;}#plcdev-workbench-refined .p-context{padding:14px;gap:9px;}#plcdev-workbench-refined .p-context-meta{flex-basis:100%;padding-left:33px;}#plcdev-workbench-refined .p-work{padding:15px 14px;}#plcdev-workbench-refined .p-graph{grid-template-columns:minmax(0,1fr);grid-template-areas:"eez" "generate" "hmi" "variables" "runtime" "load" "plc" "io" "fio" "note";}#plcdev-workbench-refined .p-node-title{flex-direction:row;align-items:center;gap:10px;padding-right:24px;}#plcdev-workbench-refined .p-node-main{padding:13px 15px;gap:8px;}#plcdev-workbench-refined .p-name{font-size:14px;}#plcdev-workbench-refined .p-edge[data-kind]{min-height:50px;}#plcdev-workbench-refined .p-edge[data-kind]:before{width:1px;height:100%;}#plcdev-workbench-refined .p-edge[data-kind="communication"] .p-edge-button{flex-direction:row;}#plcdev-workbench-refined .p-edge[data-edge="load"] svg{transform:rotate(180deg);}#plcdev-workbench-refined .p-edge[data-kind="communication"] svg{transform:rotate(90deg);}#plcdev-workbench-refined .p-legend{padding:14px 0 0;flex-direction:row;gap:10px;flex-wrap:wrap;}#plcdev-workbench-refined .p-legend-caption{display:none!important;}#plcdev-workbench-refined .p-session{padding:14px;}#plcdev-workbench-refined .p-session-actions{flex-basis:100%;padding-left:31px;}#plcdev-workbench-refined .p-other{padding:10px 14px;}#plcdev-workbench-refined .p-feedback{padding:10px 14px;}#plcdev-workbench-refined .p-end{margin:0 14px 14px;}#plcdev-workbench-refined .p-inspector-head{flex-wrap:wrap;}}
+@media(max-width:590px){#plcdev-workbench-refined .p-graph{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"eez plc" "hmi runtime" "fio fio" "generate generate" "load load" "variables variables" "io io" "note note";gap:9px;}#plcdev-workbench-refined .p-node-title{flex-direction:column;align-items:flex-start;padding-right:0;gap:7px;}#plcdev-workbench-refined .p-node-main{padding:13px 10px;}#plcdev-workbench-refined .p-edge[data-kind]{min-height:38px;justify-content:flex-start;}#plcdev-workbench-refined .p-edge:before{display:none;}#plcdev-workbench-refined .p-edge[data-kind] .p-edge-button{width:100%;justify-content:flex-start;background:var(--p-surface);padding:7px 10px;}#plcdev-workbench-refined .p-edge[data-tone="warn"] .p-edge-button{background:var(--p-warnbg);}#plcdev-workbench-refined .p-edge[data-edge] svg{transform:none;}#plcdev-workbench-refined .p-edge-button:after{margin-left:auto;color:var(--p-muted);}#plcdev-workbench-refined [data-edge="generate"] .p-edge-button:after{content:"EEZ → HMI";}#plcdev-workbench-refined [data-edge="load"] .p-edge-button:after{content:"OpenPLC → Runtime";}#plcdev-workbench-refined [data-edge="variables"] .p-edge-button:after{content:"HMI ↔ Runtime";}#plcdev-workbench-refined [data-edge="io"] .p-edge-button:after{content:"Runtime ↔ Factory I/O";}#plcdev-workbench-refined .p-legend{padding-top:5px;}}
+@media(pointer:coarse){#plcdev-workbench-refined .p-button,#plcdev-workbench-refined .p-icon-button,#plcdev-workbench-refined .p-other button,#plcdev-workbench-refined .p-health,#plcdev-workbench-refined .p-edge-button{min-height:44px;}#plcdev-workbench-refined .p-icon-button{width:44px;}#plcdev-workbench-refined .p-picker select{font-size:16px;min-height:44px;}#plcdev-workbench-refined .p-node-title{padding-right:30px;}}
+@media(max-width:800px) and (pointer:coarse){#plcdev-workbench-refined .p-node-title{padding-right:0;}}
+/* Topology workspace: runtime objects, named interfaces, and routed relationships. */
+#plcdev-workbench-refined{--t-link:light-dark(#207db2,#79bee7);--t-dot:light-dark(#dce2e8,#344350);--t-device:light-dark(#e4eaf0,#364352);--t-trim:light-dark(#a7b5c2,#7f94a7);--t-dark:light-dark(#425768,#9aafbf);--t-screen:light-dark(#f9fcfd,#24343c);--t-paper:light-dark(#f9fafc,#1a222c);--t-inksoft:light-dark(#b5c6d1,#566c7d);}
+#plcdev-workbench-refined .p-chrome{padding-top:12px;padding-bottom:12px;}
+#plcdev-workbench-refined .p-context{padding-top:12px;padding-bottom:12px;}
+#plcdev-workbench-refined .p-work{padding:0;}
+#plcdev-workbench-refined .p-work-head{margin:0;padding:11px 20px;border-bottom:1px solid var(--p-line);background:var(--p-surface);}
+#plcdev-workbench-refined .t-mode{font-size:11px;color:var(--p-muted);display:inline-flex;align-items:center;gap:6px;margin-left:10px;}
+#plcdev-workbench-refined .t-head-left{display:flex;align-items:center;flex-wrap:wrap;}
+#plcdev-workbench-refined .t-stage{display:grid;grid-template-columns:minmax(0,1fr);min-width:0;}
+#plcdev-workbench-refined[data-detail="true"] .t-stage{grid-template-columns:minmax(0,1fr) 238px;}
+#plcdev-workbench-refined .p-graph{display:block;position:relative;min-height:500px;background-color:var(--t-paper);background-image:radial-gradient(var(--t-dot) .8px,transparent .8px);background-size:16px 16px;min-width:0;}
+#plcdev-workbench-refined[data-grid="false"] .p-graph{background-image:none;}
+#plcdev-workbench-refined .t-wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;}
+#plcdev-workbench-refined .t-wire{fill:none;stroke:var(--p-muted);stroke-width:1.5;stroke-linejoin:round;vector-effect:non-scaling-stroke;}
+#plcdev-workbench-refined .t-wire[data-kind="delivery"]{stroke-dasharray:4 4;}
+#plcdev-workbench-refined .t-wire[data-kind="communication"]{stroke:var(--t-link);}
+#plcdev-workbench-refined .t-wire[data-tone="neutral"]{stroke:var(--t-trim);}
+#plcdev-workbench-refined .t-wire[data-tone="warn"]{stroke:var(--p-warn);}
+#plcdev-workbench-refined .t-wire[data-selected="true"]{stroke-width:2.5;}
+#plcdev-workbench-refined .t-wire-hit{fill:none;stroke:transparent;stroke-width:16px;pointer-events:stroke;}
+#plcdev-workbench-refined .p-node{position:absolute;border:0;border-radius:0;background:none;width:150px;transform:translateX(-50%);z-index:2;box-shadow:none;}
+#plcdev-workbench-refined .p-node[data-node="eez"]{left:20%;top:48px;}
+#plcdev-workbench-refined .p-node[data-node="plc"]{left:52%;top:48px;}
+#plcdev-workbench-refined .p-node[data-node="hmi"]{left:20%;top:240px;}
+#plcdev-workbench-refined .p-node[data-node="runtime"]{left:52%;top:204px;}
+#plcdev-workbench-refined .p-node[data-node="fio"]{left:84%;top:260px;}
+#plcdev-workbench-refined .p-node[data-selected="true"]{border:0;box-shadow:none;}
+#plcdev-workbench-refined .p-node[data-selected="true"] .t-device-body{outline:1px solid var(--p-teal);outline-offset:6px;}
+#plcdev-workbench-refined .p-node[data-unconfigured="true"]{background:none;border:0;opacity:.65;}
+#plcdev-workbench-refined .p-node-main{border:0;padding:0;border-radius:4px;align-items:center;gap:0;text-align:center;background:none;}
+#plcdev-workbench-refined .p-node-main:hover{background:none;}
+#plcdev-workbench-refined .p-node-main:hover .t-device-body{filter:brightness(.97);}
+#plcdev-workbench-refined .t-editor .p-node-main{min-height:57px;display:flex;align-items:flex-start;justify-content:center;text-align:left;padding:8px 29px 8px 10px;background:var(--p-surface);border:1px solid var(--p-line);border-radius:6px;gap:3px;}
+#plcdev-workbench-refined .t-editor[data-selected="true"] .p-node-main{border-color:var(--p-teal);background:var(--p-tint);}
+#plcdev-workbench-refined .t-editor .t-tool-title{display:flex;align-items:center;gap:7px;font-weight:600;}
+#plcdev-workbench-refined .t-editor .p-state{font-size:11px;min-height:16px;margin-left:23px;gap:4px;}
+#plcdev-workbench-refined .t-editor .p-state svg{width:12px;height:12px;}
+#plcdev-workbench-refined .p-launch{right:2px;top:4px;}
+#plcdev-workbench-refined .t-device .p-launch{top:-34px;right:-2px;background:var(--p-surface);border:1px solid var(--p-line);}
+#plcdev-workbench-refined .p-name{font-size:13px;margin-top:10px;}
+#plcdev-workbench-refined .p-role{font-size:11px;}
+#plcdev-workbench-refined .t-device .p-state{margin-top:5px;font-size:11px;gap:4px;}
+#plcdev-workbench-refined .t-device .p-state svg{width:13px;height:13px;}
+#plcdev-workbench-refined .t-device-body{position:relative;display:block;flex:none;width:142px;height:110px;border-radius:3px;}
+#plcdev-workbench-refined .t-screen-frame{display:block;width:142px;height:93px;padding:7px;border:2px solid var(--t-dark);border-radius:5px;background:var(--t-device);}
+#plcdev-workbench-refined .t-screen-glass{display:block;position:relative;width:100%;height:100%;border:1px solid var(--t-trim);background:var(--t-screen);padding:10px 10px;}
+#plcdev-workbench-refined .t-screen-bar{display:block;width:65%;height:5px;background:var(--t-inksoft);margin-bottom:11px;}
+#plcdev-workbench-refined .t-screen-chart{display:flex;height:25px;align-items:flex-end;gap:5px;width:60%;}
+#plcdev-workbench-refined .t-screen-chart b{display:block;background:var(--t-inksoft);width:9px;height:13px;}
+#plcdev-workbench-refined .t-screen-chart b:nth-child(2){height:22px;}
+#plcdev-workbench-refined .t-screen-chart b:nth-child(3){height:17px;}
+#plcdev-workbench-refined .t-screen-control{position:absolute;right:10px;bottom:10px;width:19px;height:19px;border-radius:3px;border:1px solid var(--t-trim);}
+#plcdev-workbench-refined .t-screen-stand{display:block;width:12px;height:9px;background:var(--t-trim);margin:auto;position:relative;}
+#plcdev-workbench-refined .t-screen-stand:after{content:"";position:absolute;top:8px;left:-24px;width:60px;height:4px;border-radius:3px;background:var(--t-trim);}
+#plcdev-workbench-refined .t-runtime-frame{width:130px;margin:auto;height:110px;border:1px solid var(--t-trim);border-top:4px solid var(--t-dark);background:var(--t-device);display:flex;position:relative;padding:10px 9px 9px;gap:7px;box-shadow:4px 4px 0 var(--p-line);}
+#plcdev-workbench-refined .t-runtime-strip{width:11px;background:repeating-linear-gradient(to bottom,var(--t-trim) 0 2px,transparent 2px 6px);opacity:.7;}
+#plcdev-workbench-refined .t-runtime-face{flex:1;background:var(--t-screen);border:1px solid var(--t-trim);text-align:left;padding:7px 8px;}
+#plcdev-workbench-refined .t-runtime-face b{font-size:16px;font-weight:600;display:block;line-height:1.2;color:var(--t-dark);}
+#plcdev-workbench-refined .t-runtime-face small{font-size:11px;letter-spacing:.03em;display:block;margin-top:5px;color:var(--p-muted);}
+#plcdev-workbench-refined .t-runtime-face em{display:block;font-style:normal;font-size:11px;color:var(--p-muted);border-top:1px solid var(--p-line);margin-top:8px;padding-top:5px;}
+#plcdev-workbench-refined .t-factory-body{height:110px;position:relative;}
+#plcdev-workbench-refined .t-factory-body:before,#plcdev-workbench-refined .t-factory-body:after{content:"";position:absolute;width:6px;height:23px;background:var(--t-trim);top:77px;}
+#plcdev-workbench-refined .t-factory-body:before{left:24px;transform:skewY(-10deg);}
+#plcdev-workbench-refined .t-factory-body:after{right:24px;transform:skewY(-10deg);}
+#plcdev-workbench-refined .t-conveyor{position:absolute;left:4px;right:4px;top:53px;height:27px;border:2px solid var(--t-dark);border-radius:10px;background:repeating-linear-gradient(90deg,var(--t-device) 0 12px,var(--t-trim) 12px 14px);transform:skewY(-8deg);}
+#plcdev-workbench-refined .t-package{position:absolute;width:29px;height:28px;background:var(--t-device);border:1px solid var(--t-trim);transform:skewY(-8deg);top:25px;left:39px;}
+#plcdev-workbench-refined .t-package:before{content:"";position:absolute;width:7px;height:100%;right:-7px;top:-3px;border:1px solid var(--t-trim);background:var(--t-inksoft);transform:skewY(-35deg);}
+#plcdev-workbench-refined .t-package.second{left:87px;top:19px;width:22px;height:27px;}
+#plcdev-workbench-refined .t-port{position:absolute;display:grid;place-items:center;padding:0;width:26px;min-height:26px;border:0;background:transparent;z-index:5;transform:translate(-50%,-50%);color:var(--p-muted);}
+#plcdev-workbench-refined .t-port-dot{width:11px;height:11px;border-radius:50%;background:var(--p-surface);border:2px solid var(--t-link);display:block;}
+#plcdev-workbench-refined .t-port[data-kind="delivery"] .t-port-dot{border-radius:2px;border-color:var(--p-muted);width:9px;height:9px;}
+#plcdev-workbench-refined .t-port[data-tone="ok"] .t-port-dot{background:var(--p-ok);border-color:var(--p-ok);}
+#plcdev-workbench-refined .t-port[data-tone="warn"] .t-port-dot{background:var(--p-warn);border-color:var(--p-warn);}
+#plcdev-workbench-refined .t-port[data-tone="neutral"] .t-port-dot{background:var(--t-paper);border-color:var(--t-trim);}
+#plcdev-workbench-refined .t-port[aria-pressed="true"] .t-port-dot{box-shadow:0 0 0 3px var(--p-tint);}
+#plcdev-workbench-refined .t-port-name{position:absolute;top:3px;font-size:11px;white-space:nowrap;background:var(--t-paper);padding:0 3px;color:var(--p-muted);}
+#plcdev-workbench-refined .t-port[data-side="left"] .t-port-name{left:26px;}
+#plcdev-workbench-refined .t-port[data-side="right"] .t-port-name{right:26px;}
+#plcdev-workbench-refined .t-port[data-side="top"] .t-port-name,#plcdev-workbench-refined .t-port[data-side="bottom"] .t-port-name{left:24px;}
+#plcdev-workbench-refined[data-portnames="false"] .t-port-name{display:none;}
+#plcdev-workbench-refined .t-port-top{left:50%;top:0;}
+#plcdev-workbench-refined .t-port-bottom{left:50%;top:57px;}
+#plcdev-workbench-refined .t-port-left{left:4px;top:61px;}
+#plcdev-workbench-refined .t-port-right{left:146px;top:61px;}
+#plcdev-workbench-refined [data-node="runtime"] .t-port-left{left:10px;top:64px;}
+#plcdev-workbench-refined [data-node="runtime"] .t-port-right{left:140px;top:96px;}
+#plcdev-workbench-refined [data-node="fio"] .t-port-left{left:4px;top:66px;}
+#plcdev-workbench-refined .p-edge{position:absolute;display:flex;min-height:0!important;z-index:3;transform:translate(-50%,-50%);}
+#plcdev-workbench-refined .p-edge:before,#plcdev-workbench-refined .p-edge-button:after{display:none!important;}
+#plcdev-workbench-refined .p-edge-button{flex-direction:row!important;gap:5px!important;background:var(--t-paper)!important;padding:3px 5px!important;border:1px solid transparent;font-size:11px;white-space:nowrap;min-height:27px;}
+#plcdev-workbench-refined .p-edge[data-tone="ok"] .p-edge-button{color:var(--t-link);}
+#plcdev-workbench-refined .p-edge[data-tone="warn"] .p-edge-button{color:var(--p-warn);background:var(--p-warnbg)!important;}
+#plcdev-workbench-refined .p-edge-button svg{width:13px;height:13px;}
+#plcdev-workbench-refined .p-edge[data-kind="communication"] .p-edge-button{flex-direction:column!important;gap:0!important;white-space:normal;max-width:100%;}
+#plcdev-workbench-refined .p-edge[data-edge="generate"]{left:20%;top:178px;}
+#plcdev-workbench-refined .p-edge[data-edge="load"]{left:52%;top:151px;}
+#plcdev-workbench-refined .p-edge[data-edge="variables"]{left:36%;top:285px;}
+#plcdev-workbench-refined .p-edge[data-edge="io"]{left:68%;top:332px;}
+#plcdev-workbench-refined .t-legend{position:absolute;left:18px;right:15px;bottom:13px;display:flex;gap:15px;flex-wrap:wrap;color:var(--p-muted);font-size:11px;}
+#plcdev-workbench-refined .t-legend span{display:flex;align-items:center;gap:6px;}
+#plcdev-workbench-refined .t-line-sample{width:19px;border-top:1.5px solid var(--t-link);}
+#plcdev-workbench-refined .t-line-sample.delivery{border-top-style:dashed;border-color:var(--p-muted);}
+#plcdev-workbench-refined .t-point-sample{width:6px;height:6px;border-radius:50%;background:var(--p-ok);}
+#plcdev-workbench-refined .p-inspector{margin:0;border:0;border-left:1px solid var(--p-line);border-radius:0;padding:15px 17px;background:var(--p-surface);min-width:0;}
+#plcdev-workbench-refined .p-inspector-head{flex-wrap:wrap;gap:7px;}
+#plcdev-workbench-refined .p-inspector-head h3{font-size:13px;flex:1;}
+#plcdev-workbench-refined .p-inspector-head small{order:5;flex-basis:100%;margin:0 0 9px;color:var(--p-muted);}
+#plcdev-workbench-refined .p-inspector-head .p-icon-button{width:26px;min-height:26px;padding:5px;}
+#plcdev-workbench-refined .p-fields{display:flex;flex-direction:column;gap:15px;}
+#plcdev-workbench-refined .p-fields div{min-width:0;}
+#plcdev-workbench-refined .p-fields dd{font-size:12px;}
+#plcdev-workbench-refined .p-detail-bottom{border-top:1px solid var(--p-line);padding-top:14px;margin-top:18px;gap:12px;}
+#plcdev-workbench-refined .p-detail-note{min-width:0;flex-basis:100%;font-size:12px;}
+#plcdev-workbench-refined .p-detail-bottom .p-button{font-size:12px;}
+#plcdev-workbench-refined .t-mobile-ends{display:none;}
+#plcdev-workbench-refined .p-session{padding:12px 20px;}
+@media(max-width:900px){#plcdev-workbench-refined[data-detail="true"] .t-stage{grid-template-columns:minmax(0,1fr);}#plcdev-workbench-refined .p-inspector{border-left:0;border-top:1px solid var(--p-line);}#plcdev-workbench-refined .p-fields{flex-direction:row;flex-wrap:wrap;}#plcdev-workbench-refined .p-fields div{flex:1;min-width:140px;}}
+@media(max-width:640px){#plcdev-workbench-refined .p-graph{min-height:0;padding:15px 12px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-areas:"eez plc" "hmi runtime" "fio fio" "generate generate" "load load" "variables variables" "io io" "note note";gap:18px 8px;}#plcdev-workbench-refined .t-wires,#plcdev-workbench-refined .t-port{display:none;}#plcdev-workbench-refined .p-node{position:relative;left:auto!important;top:auto!important;transform:none;justify-self:center;width:130px;max-width:100%;}#plcdev-workbench-refined .t-editor .p-node-main{padding-left:8px;padding-right:25px;}#plcdev-workbench-refined .t-tool-title{font-size:12px;}#plcdev-workbench-refined .t-device-body{width:126px;}#plcdev-workbench-refined .t-screen-frame{width:126px;}#plcdev-workbench-refined .t-runtime-frame{width:116px;}#plcdev-workbench-refined .t-package.second{left:78px;}#plcdev-workbench-refined .p-edge{position:static;transform:none;width:100%;justify-content:stretch;}#plcdev-workbench-refined .p-edge .p-edge-button{width:100%;justify-content:flex-start;padding:7px 9px!important;border-color:var(--p-line);background:var(--p-surface)!important;white-space:normal;}#plcdev-workbench-refined .t-mobile-ends{display:inline;margin-left:auto;color:var(--p-muted);font-size:11px;}#plcdev-workbench-refined .t-legend{position:static;grid-area:note;gap:12px;}#plcdev-workbench-refined .p-work-head{padding:10px 14px;}#plcdev-workbench-refined .t-mode{margin-left:7px;}#plcdev-workbench-refined .p-file{font-size:11px;}}
+@media(pointer:coarse){#plcdev-workbench-refined .t-port{width:44px;min-height:44px;}#plcdev-workbench-refined .p-edge-button{min-height:44px;}}
+@media(pointer:coarse){#plcdev-workbench-refined .t-device .p-launch{top:-46px;}}
+@media(max-width:640px){#plcdev-workbench-refined .t-device{padding-top:34px;}#plcdev-workbench-refined .t-device .p-launch{top:0;right:0;}#plcdev-workbench-refined .p-edge{max-width:none!important;}#plcdev-workbench-refined .p-edge[data-kind="communication"] .p-edge-button{flex-direction:row!important;gap:5px!important;}}
+@media(max-width:640px) and (pointer:coarse){#plcdev-workbench-refined .t-device{padding-top:46px;}}
+
+html{color-scheme:light dark;}body{margin:0;background:light-dark(#edf1f5,#10151d);padding:20px;font-family:system-ui,"Microsoft YaHei",sans-serif;}#plcdev-workbench-refined{max-width:1320px;margin:0 auto;}#plcdev-workbench-refined button{cursor:pointer;}#plcdev-workbench-refined button:disabled{cursor:not-allowed;}#plcdev-workbench-refined .project-title{border:0;background:transparent;padding:2px 0;text-align:left;font-size:17px;font-weight:600;display:flex;gap:12px;align-items:center;}#plcdev-workbench-refined .t-tool-title img{width:24px;height:24px;object-fit:contain;background:#fff;border-radius:5px;padding:3px;flex:none;}#plcdev-workbench-refined .t-editor .t-port-bottom{top:100%;}#plcdev-workbench-refined .live-notice{font-size:12px;padding:9px 20px;background:var(--p-tint);border-bottom:1px solid var(--p-line);color:var(--p-ink);}#plcdev-workbench-refined .live-notice[data-error="true"]{background:var(--p-warnbg);color:var(--p-warn);}#plcdev-workbench-refined .activity{border-top:1px solid var(--p-line);padding:11px 20px;color:var(--p-muted);font-size:12px;}#plcdev-workbench-refined .activity summary{cursor:pointer;}#plcdev-workbench-refined #dependencies{display:flex;flex-wrap:wrap;gap:6px 16px;padding-top:10px;}#plcdev-workbench-refined .dependency.missing{color:var(--p-warn);}#plcdev-workbench-refined #events{padding-left:20px;margin:12px 0 0;}#plcdev-workbench-refined #events li{padding:3px 0;overflow-wrap:anywhere;}#plcdev-workbench-refined .p-node .p-state{max-width:100%;}#plcdev-workbench-refined .p-edge-button:disabled{opacity:.7;}@media(max-width:700px){body{padding:8px;}#plcdev-workbench-refined .project-title{font-size:15px;}}
+
+#plcdev-workbench-refined .p-project-description{font-size:11px;color:var(--p-muted);}
+#plcdev-workbench-refined .p-picker select{max-width:370px;padding:5px 27px 5px 8px;border:1px solid var(--p-line);border-radius:6px;cursor:pointer;}
+#plcdev-workbench-refined .p-running-projects{background:var(--p-warnbg);border-bottom:1px solid var(--p-line);padding:10px 22px;}
+#plcdev-workbench-refined .p-running-projects>div{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+#plcdev-workbench-refined .p-running-projects small{display:block;color:var(--p-muted);margin-top:4px;font-size:11px;}
+#plcdev-workbench-refined .p-running-projects .p-button{font-size:12px;padding:4px 9px;min-height:29px;}
+
+#plcdev-workbench-refined .p-local-debug{border-top:1px solid var(--p-line);background:var(--p-surface);padding:11px 20px;}
+#plcdev-workbench-refined .p-local-debug summary{cursor:pointer;font-size:12px;font-weight:600;}
+#plcdev-workbench-refined .p-local-debug summary>span{margin-left:9px;color:var(--p-muted);font-size:11px;font-weight:400;}
+#plcdev-workbench-refined .p-debug-body{padding:12px 0 2px;}
+#plcdev-workbench-refined .p-debug-context{display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:12px;}
+#plcdev-workbench-refined .p-debug-context strong{font-weight:500;}
+#plcdev-workbench-refined .p-debug-controls{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:12px;}
+#plcdev-workbench-refined .p-input-values{display:flex;gap:25px;flex-wrap:wrap;font-size:12px;color:var(--p-muted);}
+#plcdev-workbench-refined .p-input-values b{display:inline-block;margin-left:7px;color:var(--p-ink);font-size:16px;font-weight:600;}
+#plcdev-workbench-refined .p-input-values b[data-on="true"]{color:var(--p-ok);}
+#plcdev-workbench-refined .p-input-actions{display:flex;gap:7px;}
+#plcdev-workbench-refined .p-input-actions .p-button{font-size:12px;}
+#plcdev-workbench-refined .p-input-note{font-size:11px;color:var(--p-muted);padding-top:10px;line-height:1.5;}
+#plcdev-workbench-refined[data-topology="local"] .p-graph{min-height:285px;}
+#plcdev-workbench-refined[data-topology="local"] [data-node="plc"]{left:27%;top:88px;}
+#plcdev-workbench-refined[data-topology="local"] [data-node="runtime"]{left:72%;top:64px;}
+#plcdev-workbench-refined[data-topology="local"] #t-plc-out{left:100%;top:50%;}
+#plcdev-workbench-refined[data-topology="local"] #t-runtime-in{left:10px;top:64px;}
+#plcdev-workbench-refined[data-topology="local"] #t-plc-out .t-port-name,#plcdev-workbench-refined[data-topology="local"] #t-runtime-in .t-port-name{left:0;top:-20px;}
+#plcdev-workbench-refined[data-topology="local"] .t-legend span:nth-child(2){display:none;}
+@media(max-width:640px){#plcdev-workbench-refined[data-topology="local"] .p-graph{grid-template-areas:"plc runtime" "load load" "note note";min-height:0;}#plcdev-workbench-refined .p-running-projects{padding:10px 14px;}#plcdev-workbench-refined .p-local-debug{padding:11px 14px;}}
+
+#plcdev-workbench-refined .p-connection{padding:28px 24px;background:var(--p-surface);border-bottom:1px solid var(--p-line);}
+#plcdev-workbench-refined .p-connection h2{font-size:17px;margin:0 0 9px;}
+#plcdev-workbench-refined .p-connection p{font-size:13px;line-height:1.7;color:var(--p-muted);margin:6px 0;}
+#plcdev-workbench-refined .p-connection code{display:inline-block;max-width:100%;padding:8px 11px;background:var(--p-soft);border-radius:5px;overflow-wrap:anywhere;font-size:12px;user-select:all;}
+#plcdev-workbench-refined #p-launch-help{margin:15px 0;}
+#plcdev-workbench-refined .p-connection .p-button{margin-top:10px;}
+#plcdev-workbench-refined .p-connection[data-state="missing-auth"] h2,#plcdev-workbench-refined .p-connection[data-state="invalid-auth"] h2{color:var(--p-warn);}
+
+/* Pipelines: artifact delivery is static; communication motion is evidence-gated. */
+#plcdev-workbench-refined .t-pipeline{--pipe-color:var(--t-trim);}
+#plcdev-workbench-refined .t-pipeline[data-tone="ok"]{--pipe-color:var(--p-ok);}
+#plcdev-workbench-refined .t-pipeline[data-tone="warn"]{--pipe-color:var(--p-warn);}
+#plcdev-workbench-refined .t-pipeline[data-selected="true"]{--pipe-color:var(--p-teal);}
+#plcdev-workbench-refined .t-pipe-casing,#plcdev-workbench-refined .t-pipe-flow{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;}
+#plcdev-workbench-refined .t-pipe-casing{stroke:var(--p-surface);stroke-width:8px;}
+#plcdev-workbench-refined .t-pipeline .t-wire{stroke:var(--pipe-color);stroke-width:3px;stroke-linecap:round;}
+#plcdev-workbench-refined .t-pipeline[data-kind="delivery"] .t-wire{stroke-width:2px;stroke-dasharray:6 5;}
+#plcdev-workbench-refined .t-pipeline[data-selected="true"] .t-pipe-casing{stroke:var(--p-tint);stroke-width:12px;}
+#plcdev-workbench-refined .t-wire-hit{stroke-width:22px;cursor:pointer;}
+#plcdev-workbench-refined .t-arrow{fill:var(--t-trim);}
+#plcdev-workbench-refined .t-arrow[data-tone="ok"]{fill:var(--p-ok);}
+#plcdev-workbench-refined .t-arrow[data-tone="warn"]{fill:var(--p-warn);}
+#plcdev-workbench-refined .t-arrow[data-tone="selected"]{fill:var(--p-teal);}
+#plcdev-workbench-refined .t-pipe-flow{stroke:var(--p-surface);stroke-width:1.4px;stroke-dasharray:4 24;opacity:0;animation:none;pointer-events:none;}
+#plcdev-workbench-refined .t-pipeline[data-flow="true"] .t-pipe-flow{opacity:.85;animation:plcdev-pipe-flow 3s linear infinite;}
+@keyframes plcdev-pipe-flow{to{stroke-dashoffset:-56;}}
+#plcdev-workbench-refined[data-motion-paused="true"] .t-pipe-flow{animation:none;opacity:0;}
+@media(prefers-reduced-motion:reduce){#plcdev-workbench-refined .t-pipe-flow{animation:none!important;opacity:0!important;}}
+#plcdev-workbench-refined .p-node[data-linked="true"] .t-device-body{outline:2px solid var(--p-teal);outline-offset:6px;border-radius:5px;}
+#plcdev-workbench-refined .t-editor[data-linked="true"] .p-node-main{border-color:var(--p-teal);box-shadow:0 0 0 3px var(--p-tint);}
+#plcdev-workbench-refined .p-edge .p-edge-button{gap:6px!important;border:1px solid var(--p-line);border-radius:6px;padding:5px 7px!important;box-shadow:0 2px 5px color-mix(in srgb,var(--p-ink) 5%,transparent);}
+#plcdev-workbench-refined .p-edge[data-kind="communication"] .p-edge-button{flex-direction:row!important;}
+#plcdev-workbench-refined .p-edge[data-selected="true"] .p-edge-button{border-color:var(--p-teal);box-shadow:0 0 0 2px var(--p-tint);}
+#plcdev-workbench-refined .t-line-caption{display:flex;flex-direction:column;min-width:0;line-height:1.35;gap:2px;text-align:left;}
+#plcdev-workbench-refined .t-line-caption strong{font-size:11px;font-weight:600;color:var(--p-ink);}
+#plcdev-workbench-refined .t-line-state{font-size:10px;white-space:normal;overflow-wrap:anywhere;}
+#plcdev-workbench-refined .p-edge[data-tone="neutral"] .t-line-state{color:var(--p-muted);}
+#plcdev-workbench-refined .t-line-sample{border-top-width:3px;}
+#plcdev-workbench-refined .t-line-sample.delivery{border-top-width:2px;}
+@media(max-width:640px){#plcdev-workbench-refined .p-edge .p-edge-button{min-height:47px;}#plcdev-workbench-refined .t-line-caption{min-width:86px;}#plcdev-workbench-refined .t-line-state{font-size:11px;}}
+
+#plcdev-workbench-refined .t-pipeline[data-selected="true"][data-tone="warn"]{--pipe-color:var(--p-warn);}
+
+#plcdev-workbench-refined #p-file-fio{display:block;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px;}
+#plcdev-workbench-refined #p-file-fio:empty{display:none;}
+#plcdev-workbench-refined .p-factory-identity{font-size:10px;color:var(--p-muted);margin-top:2px;}
+#plcdev-workbench-refined .p-detail-actions{display:flex;gap:8px;flex-wrap:wrap;}
+
+#plcdev-workbench-refined .p-project-actions{display:flex;gap:6px;flex-wrap:wrap;}
+#plcdev-workbench-refined .p-project-actions .p-button{font-size:12px;}
+#plcdev-workbench-refined .p-catalog-help{flex-basis:100%;font-size:12px;color:var(--p-warn);line-height:1.6;}
+#plcdev-workbench-refined .p-user-session-note{font-size:11px;color:var(--p-muted);line-height:1.6;margin-top:5px;max-width:580px;}
+#plcdev-workbench-refined #p-new-project{color:var(--p-teal);background:var(--p-tint);}
+#plcdev-workbench-refined .p-project-dialog{width:min(540px,calc(100vw - 28px));max-height:calc(100dvh - 36px);padding:23px;border:1px solid var(--p-line);border-radius:12px;background:var(--p-surface);color:var(--p-ink);box-shadow:0 15px 70px #0003;overflow:auto;}
+#plcdev-workbench-refined .p-project-dialog::backdrop{background:#15212d66;backdrop-filter:blur(2px);}
+#plcdev-workbench-refined .p-project-dialog-head{display:flex;align-items:center;justify-content:space-between;gap:15px;}
+#plcdev-workbench-refined .p-project-dialog h2{font-size:19px;}
+#plcdev-workbench-refined .p-project-dialog-intro{font-size:12px;color:var(--p-muted);line-height:1.7;margin:7px 0 16px;}
+#plcdev-workbench-refined .p-project-dialog label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:500;margin-top:13px;}
+#plcdev-workbench-refined .p-project-dialog input,#plcdev-workbench-refined .p-project-dialog select{font:inherit;color:var(--p-ink);background:var(--p-surface);min-width:0;width:100%;min-height:38px;padding:8px 10px;border:1px solid var(--p-line);border-radius:6px;}
+#plcdev-workbench-refined .p-project-dialog input:focus-visible,#plcdev-workbench-refined .p-project-dialog select:focus-visible{outline:2px solid var(--p-teal);outline-offset:1px;}
+#plcdev-workbench-refined .p-project-dialog input:disabled,#plcdev-workbench-refined .p-project-dialog select:disabled{opacity:.6;}
+#plcdev-workbench-refined .p-project-dialog small{display:block;font-size:11px;color:var(--p-muted);line-height:1.65;margin-top:6px;}
+#plcdev-workbench-refined #p-project-form-message{font-size:12px;line-height:1.65;color:var(--p-warn);margin-top:14px;overflow-wrap:anywhere;}
+#plcdev-workbench-refined #p-project-form-message:empty{display:none;}
+#plcdev-workbench-refined .p-project-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;}
+#plcdev-workbench-refined #p-project-submit{background:var(--p-button);border-color:var(--p-button);color:var(--p-onbutton);}
+#plcdev-workbench-refined .p-monitor-scroll{max-height:280px;overflow:auto;margin-top:12px;}
+#plcdev-workbench-refined #p-monitor-table{border-collapse:collapse;width:100%;font-size:12px;text-align:left;}
+#plcdev-workbench-refined #p-monitor-table th{font-weight:500;color:var(--p-muted);background:var(--p-soft);position:sticky;top:0;}
+#plcdev-workbench-refined #p-monitor-table td,#plcdev-workbench-refined #p-monitor-table th{padding:8px 12px;border-bottom:1px solid var(--p-line);}
+#plcdev-workbench-refined #p-monitor-table td:first-child{font-family:ui-monospace,Consolas,monospace;overflow-wrap:anywhere;}
+#plcdev-workbench-refined #p-monitor-table td:nth-child(2){color:var(--p-muted);}
+#plcdev-workbench-refined #p-monitor-table td:last-child{font-variant-numeric:tabular-nums;overflow-wrap:anywhere;}
+@media(max-width:640px){#plcdev-workbench-refined .p-project-actions{width:100%;}#plcdev-workbench-refined .p-project-actions .p-button{flex:1;}#plcdev-workbench-refined .p-project-dialog{padding:17px;}#plcdev-workbench-refined #p-monitor-table td,#plcdev-workbench-refined #p-monitor-table th{padding:7px;}}
+
+
+/* Engineering workspace: project explorer / topology / information dock. */
+html,body{height:100%;}
+body{padding:0;overflow:hidden;}
+#plcdev-workbench-refined{max-width:none;width:100%;height:100dvh;margin:0;font-size:12px;}
+#plcdev-workbench-refined .p-window{height:100%;border:0;border-radius:0;display:flex;flex-direction:column;overflow:hidden;}
+#plcdev-workbench-refined .p-chrome{height:44px;min-height:44px;padding:6px 18px;border-radius:0;flex-wrap:nowrap;}
+#plcdev-workbench-refined .p-brand{font-size:15px;gap:8px;}
+#plcdev-workbench-refined .p-brand-mark{width:25px;height:25px;border-radius:5px;}
+#plcdev-workbench-refined .p-chrome-label{font-size:12px;}
+#plcdev-workbench-refined .p-shell{display:grid;grid-template-columns:248px minmax(0,1fr);flex:1;min-height:0;}
+#plcdev-workbench-refined .p-explorer{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--p-line);background:var(--p-surface);}
+#plcdev-workbench-refined .p-pane-title{height:38px;min-height:38px;display:flex;align-items:center;gap:8px;padding:0 13px;background:var(--p-soft);border-bottom:1px solid var(--p-line);}
+#plcdev-workbench-refined .p-pane-title h2{font-size:12px;}
+#plcdev-workbench-refined .p-pane-title>svg{color:var(--p-teal);}
+#plcdev-workbench-refined .p-explorer .p-project-actions{display:flex;gap:7px;padding:11px 10px 8px;width:auto;}
+#plcdev-workbench-refined .p-project-actions .p-button{min-height:30px;padding:4px 9px;border-radius:4px;flex:1;font-size:12px;white-space:nowrap;}
+#plcdev-workbench-refined .p-tree-caption{padding:4px 14px 10px;font-size:10px;color:var(--p-muted);letter-spacing:.06em;}
+#plcdev-workbench-refined .p-project-tree{flex:1;overflow:auto;min-height:0;padding:0 6px 12px;}
+#plcdev-workbench-refined .p-tree-empty{padding:16px 10px;color:var(--p-muted);font-size:12px;}
+#plcdev-workbench-refined .p-tree-branch{margin-bottom:3px;}
+#plcdev-workbench-refined .p-tree-item{display:flex;align-items:center;gap:7px;width:100%;min-height:34px;padding:6px 8px;border:1px solid transparent;border-radius:4px;background:transparent;text-align:left;color:var(--p-ink);font-size:12px;}
+#plcdev-workbench-refined .p-tree-item:hover{background:var(--p-soft);}
+#plcdev-workbench-refined .p-tree-project{font-weight:600;}
+#plcdev-workbench-refined .p-tree-item[aria-selected="true"],#plcdev-workbench-refined .p-tree-item[data-current="true"]{background:var(--p-tint);color:var(--p-teal);border-color:color-mix(in srgb,var(--p-teal) 16%,transparent);}
+#plcdev-workbench-refined .p-tree-component{padding-left:34px;font-weight:400;min-height:31px;}
+#plcdev-workbench-refined .p-tree-item:focus-visible,#plcdev-workbench-refined [role="tab"]:focus-visible{outline:2px solid var(--p-teal);outline-offset:-2px;}
+#plcdev-workbench-refined .p-tree-chevron{width:12px;flex:none;font-size:11px;display:inline-flex;align-items:center;justify-content:center;color:var(--p-muted);}
+#plcdev-workbench-refined .p-tree-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;}
+#plcdev-workbench-refined .p-tree-status{font-size:10px;color:var(--p-muted);font-weight:400;white-space:nowrap;margin-left:auto;}
+#plcdev-workbench-refined .p-tree-status[data-running="true"]{color:var(--p-ok);}
+#plcdev-workbench-refined .p-tree-item>svg{width:15px;height:15px;flex:none;color:var(--p-muted);}
+#plcdev-workbench-refined .p-tree-item img{width:16px;height:16px;object-fit:contain;flex:none;}
+#plcdev-workbench-refined .p-explorer-foot{border-top:1px solid var(--p-line);padding:12px 13px;color:var(--p-muted);font-size:10px;line-height:1.7;}
+#plcdev-workbench-refined .p-explorer-hint{display:block;}
+#plcdev-workbench-refined #p-project-id{display:block;font-family:ui-monospace,Consolas,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;margin-top:6px;opacity:.7;}
+#plcdev-workbench-refined .p-center{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--p-surface);overflow:hidden;}
+#plcdev-workbench-refined .p-context{padding:7px 16px;gap:9px;min-height:50px;flex-wrap:wrap;flex:none;}
+#plcdev-workbench-refined .p-context-title{min-width:0;flex:1;}
+#plcdev-workbench-refined #p-current-title{font-size:15px;font-weight:600;margin:0;line-height:1.5;}
+#plcdev-workbench-refined .p-project-description{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:60vw;font-size:10px;line-height:1.5;}
+#plcdev-workbench-refined .p-context-meta{font-size:10px;gap:7px;}
+#plcdev-workbench-refined .p-catalog-help{flex-basis:100%;font-size:11px;}
+#plcdev-workbench-refined .p-work{padding:0;flex:1;min-height:0;display:flex;flex-direction:column;}
+#plcdev-workbench-refined .p-work-head{min-height:33px;padding:5px 16px;background:var(--p-soft);flex:none;}
+#plcdev-workbench-refined .p-work-head h2{display:flex;align-items:center;gap:7px;font-size:12px;}
+#plcdev-workbench-refined .p-work-head h2 svg{width:14px;height:14px;color:var(--p-teal);}
+#plcdev-workbench-refined .p-health{font-size:11px;padding:0;}
+#plcdev-workbench-refined .p-session{padding:7px 16px;gap:10px;flex:none;border-top:0;border-bottom:1px solid var(--p-line);min-height:54px;flex-wrap:nowrap;}
+#plcdev-workbench-refined .p-session-info{min-width:0;}
+#plcdev-workbench-refined .p-session-title{font-size:11px;gap:7px;}
+#plcdev-workbench-refined .p-session-target{font-size:10px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#plcdev-workbench-refined .p-session-actions{flex-wrap:nowrap;flex:none;padding:0;gap:6px;}
+#plcdev-workbench-refined .p-session-actions .p-button{padding:4px 9px;min-height:29px;font-size:11px;border-radius:4px;white-space:nowrap;}
+#plcdev-workbench-refined .p-end{margin:4px 12px;padding:7px 12px;flex:none;}
+#plcdev-workbench-refined .t-stage,#plcdev-workbench-refined[data-detail="true"] .t-stage{display:block;flex:1;min-height:0;overflow:auto;}
+#plcdev-workbench-refined .p-graph,#plcdev-workbench-refined[data-topology="local"] .p-graph{height:100%;min-height:400px;min-width:700px;display:block;padding:0;}
+#plcdev-workbench-refined .p-node[data-node="eez"],#plcdev-workbench-refined .p-node[data-node="plc"]{top:26px;}
+#plcdev-workbench-refined .p-node[data-node="hmi"]{top:calc(50% - 10px);}
+#plcdev-workbench-refined .p-node[data-node="runtime"]{top:calc(50% - 35px);}
+#plcdev-workbench-refined .p-node[data-node="fio"]{top:calc(50% - 55px);}
+#plcdev-workbench-refined[data-topology="local"] [data-node="plc"]{left:29%;top:calc(46% - 30px);}
+#plcdev-workbench-refined[data-topology="local"] [data-node="runtime"]{left:69%;top:calc(46% - 60px);}
+#plcdev-workbench-refined .t-legend{bottom:10px;font-size:10px;}
+#plcdev-workbench-refined .p-info-dock{height:clamp(198px,27vh,270px);flex:none;display:flex;flex-direction:column;border-top:3px solid var(--p-line);min-height:0;background:var(--p-surface);}
+#plcdev-workbench-refined .p-info-tabs{display:flex;align-items:stretch;gap:0;min-height:34px;border-bottom:1px solid var(--p-line);background:var(--p-soft);flex:none;}
+#plcdev-workbench-refined .p-info-tabs button{display:flex;align-items:center;gap:7px;border:0;border-right:1px solid var(--p-line);border-top:2px solid transparent;background:transparent;font-size:12px;padding:6px 15px;color:var(--p-muted);}
+#plcdev-workbench-refined .p-info-tabs button[aria-selected="true"]{background:var(--p-surface);border-top-color:var(--p-teal);color:var(--p-teal);font-weight:600;}
+#plcdev-workbench-refined .p-info-tabs button svg{width:14px;height:14px;}
+#plcdev-workbench-refined .p-info-caption{margin-left:auto;align-self:center;font-size:10px;padding:0 13px;color:var(--p-muted);}
+#plcdev-workbench-refined .p-info-panel{min-height:0;overflow:auto;flex:1;outline-offset:-3px;}
+#plcdev-workbench-refined .p-panel-empty{padding:22px;color:var(--p-muted);font-size:12px;}
+#plcdev-workbench-refined .p-inspector{margin:0;padding:12px 16px;border:0;display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:0 24px;}
+#plcdev-workbench-refined .p-inspector-head{grid-column:1/-1;flex-wrap:nowrap;margin-bottom:11px;padding-bottom:8px;border-bottom:1px solid var(--p-line);gap:7px;}
+#plcdev-workbench-refined .p-inspector-head h3{flex:none;font-size:12px;}
+#plcdev-workbench-refined .p-inspector-head small{order:initial;flex-basis:auto;margin:0 0 0 12px;font-size:10px;}
+#plcdev-workbench-refined .p-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 20px;}
+#plcdev-workbench-refined .p-fields div{min-width:0;}
+#plcdev-workbench-refined .p-fields dt{font-size:10px;}
+#plcdev-workbench-refined .p-fields dd{font-size:11px;margin-top:3px;}
+#plcdev-workbench-refined .p-detail-bottom{margin:0;padding:0 0 0 18px;border:0;border-left:1px solid var(--p-line);}
+#plcdev-workbench-refined .p-detail-note{font-size:11px;line-height:1.7;}
+#plcdev-workbench-refined .p-detail-actions{display:flex;flex-wrap:wrap;gap:7px;}
+#plcdev-workbench-refined .p-detail-actions .p-button{min-height:29px;font-size:11px;padding:4px 9px;}
+#plcdev-workbench-refined .p-issue-list{grid-column:1/-1;}
+#plcdev-workbench-refined .p-info-panel .p-local-debug{border:0;padding:10px 16px;}
+#plcdev-workbench-refined .p-info-panel .p-local-debug>summary{display:none;}
+#plcdev-workbench-refined .p-debug-body{padding:0;}
+#plcdev-workbench-refined .p-debug-context{font-size:11px;}
+#plcdev-workbench-refined .p-monitor-scroll{max-height:none;margin-top:9px;overflow:visible;}
+#plcdev-workbench-refined #p-monitor-table th,#plcdev-workbench-refined #p-monitor-table td{padding:6px 10px;font-size:11px;}
+#plcdev-workbench-refined .p-info-panel .activity{border-top:0;padding:9px 16px;}
+#plcdev-workbench-refined .p-info-panel .activity>summary{display:none;}
+#plcdev-workbench-refined #dependencies{padding-top:0;font-size:11px;}
+#plcdev-workbench-refined #events{margin-top:8px;}
+#plcdev-workbench-refined .p-other{border-top:0;border-bottom:1px solid var(--p-line);padding:7px 16px;background:var(--p-bg);}
+#plcdev-workbench-refined .p-runtime-notes{padding:0 16px 10px;}
+#plcdev-workbench-refined .p-user-session-note{max-width:none;font-size:10px;margin-top:3px;}
+#plcdev-workbench-refined .p-feedback{flex:none;min-height:23px;padding:4px 12px;font-size:10px;line-height:1.5;background:var(--p-soft);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+#plcdev-workbench-refined .p-running-projects{padding:6px 16px;font-size:11px;flex:none;}
+#plcdev-workbench-refined .p-running-projects small{margin:1px 0 0;font-size:10px;}
+#plcdev-workbench-refined .live-notice{padding:6px 16px;font-size:11px;flex:none;}
+#plcdev-workbench-refined .p-connection{margin:14px;overflow:auto;max-height:50vh;flex:none;}
+@media(min-width:1600px){#plcdev-workbench-refined .p-shell{grid-template-columns:280px minmax(0,1fr);}#plcdev-workbench-refined .p-tree-item{min-height:37px;}#plcdev-workbench-refined .p-info-dock{height:29vh;}}
+@media(max-width:1100px){#plcdev-workbench-refined .p-shell{grid-template-columns:218px minmax(0,1fr);}#plcdev-workbench-refined .p-inspector{grid-template-columns:minmax(0,1fr) 215px;gap:0 15px;}#plcdev-workbench-refined .p-fields{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-height:780px) and (min-width:761px){#plcdev-workbench-refined .p-info-dock{height:190px;}#plcdev-workbench-refined .p-graph,#plcdev-workbench-refined[data-topology="local"] .p-graph{min-height:350px;}}
+@media(max-width:760px){body{overflow:auto;}#plcdev-workbench-refined{min-width:800px;min-height:680px;}#plcdev-workbench-refined .p-shell{grid-template-columns:205px minmax(0,1fr);}#plcdev-workbench-refined .p-chrome{flex-wrap:nowrap;}#plcdev-workbench-refined .p-prototype{margin-left:auto;flex-basis:auto;}#plcdev-workbench-refined .p-session-actions{flex-basis:auto;}#plcdev-workbench-refined .p-info-caption{display:none;}#plcdev-workbench-refined .p-graph{display:block;}#plcdev-workbench-refined .p-node{position:absolute;transform:translateX(-50%);width:150px;max-width:none;}#plcdev-workbench-refined .t-wires,#plcdev-workbench-refined .t-port{display:block;}#plcdev-workbench-refined .p-edge{position:absolute;transform:translate(-50%,-50%);width:auto;}}
+
+@media(max-height:700px) and (min-width:761px){
+ #plcdev-workbench-refined .p-chrome{height:38px;min-height:38px;padding-top:4px;padding-bottom:4px;}
+ #plcdev-workbench-refined .p-context{min-height:44px;padding-top:4px;padding-bottom:4px;}
+ #plcdev-workbench-refined .p-work-head{min-height:28px;padding-top:3px;padding-bottom:3px;}
+ #plcdev-workbench-refined .p-session{min-height:48px;padding-top:4px;padding-bottom:4px;}
+ #plcdev-workbench-refined .p-info-dock{height:155px;}
+ #plcdev-workbench-refined .p-feedback{min-height:20px;padding-top:2px;padding-bottom:2px;}
+ #plcdev-workbench-refined .p-graph,#plcdev-workbench-refined[data-topology="local"] .p-graph{min-height:230px;}
+ #plcdev-workbench-refined .p-node{transform:translateX(-50%) scale(.76);transform-origin:top center;}
+ #plcdev-workbench-refined .p-node[data-node="eez"],#plcdev-workbench-refined .p-node[data-node="plc"]{top:8px;}
+ #plcdev-workbench-refined .p-node[data-node="hmi"]{top:88px;}
+ #plcdev-workbench-refined .p-node[data-node="runtime"]{top:83px;}
+ #plcdev-workbench-refined .p-node[data-node="fio"]{top:80px;}
+ #plcdev-workbench-refined #p-file-fio,#plcdev-workbench-refined .p-factory-identity,#plcdev-workbench-refined .t-legend{display:none;}
+ #plcdev-workbench-refined[data-topology="local"] [data-node="plc"]{top:calc(46% - 20px);}
+ #plcdev-workbench-refined[data-topology="local"] [data-node="runtime"]{top:calc(46% - 50px);}
+ #plcdev-workbench-refined .p-fields{grid-template-columns:repeat(4,minmax(0,1fr));}
+ #plcdev-workbench-refined .p-info-tabs{min-height:30px;}
+ #plcdev-workbench-refined .p-info-tabs button{font-size:11px;padding-top:4px;padding-bottom:4px;}
+ #plcdev-workbench-refined .p-inspector{padding-top:8px;padding-bottom:8px;}
+ #plcdev-workbench-refined .p-inspector-head{margin-bottom:7px;padding-bottom:6px;}
+ #plcdev-workbench-refined .p-edge-button{font-size:10px;}
+}
+
+/* Compact project toolbar: no global banner or repeated project/session headings. */
+/* Engineering definitions remain separate from a running session. */
+#plcdev-workbench-refined .p-integration-dialog{width:min(860px,calc(100vw - 28px));padding:20px 24px 0;}
+#plcdev-workbench-refined .p-integration-dialog .p-project-intro{font-size:12px;line-height:1.6;color:var(--p-muted);margin:8px 0;}
+#plcdev-workbench-refined .p-integration-files{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+#plcdev-workbench-refined .p-binding-section{margin-top:18px;border:1px solid var(--p-line);border-radius:7px;overflow:hidden;}
+#plcdev-workbench-refined .p-binding-section summary{padding:10px 12px;font-size:12px;font-weight:600;cursor:pointer;background:var(--p-soft);}
+#plcdev-workbench-refined .p-binding-section summary span{margin-left:12px;font-weight:400;font-size:11px;color:var(--p-muted);}
+#plcdev-workbench-refined .p-binding-scroll{overflow:auto;max-height:280px;}
+#plcdev-workbench-refined .p-binding-table{width:100%;border-collapse:collapse;font-size:11px;}
+#plcdev-workbench-refined .p-binding-table th,#plcdev-workbench-refined .p-binding-table td{padding:5px 8px;border-bottom:1px solid var(--p-line);text-align:left;}
+#plcdev-workbench-refined .p-binding-table thead th{position:sticky;top:0;background:var(--p-soft);font-weight:500;z-index:1;}
+#plcdev-workbench-refined .p-binding-table tbody th{font-weight:500;width:132px;word-break:break-word;}
+#plcdev-workbench-refined .p-binding-table input{font-size:12px;font-family:Consolas,monospace;min-height:30px;padding:5px 7px;}
+#plcdev-workbench-refined .p-binding-table td:nth-child(2){min-width:210px;}
+#plcdev-workbench-refined .p-binding-table td:nth-child(3){width:82px;}
+#plcdev-workbench-refined .p-binding-table td:nth-child(4){width:112px;}
+#plcdev-workbench-refined .p-oip-bindings{display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;padding:0 12px 14px;}
+#plcdev-workbench-refined .p-oip-bindings .p-inline-check{display:flex;flex-direction:row;align-items:center;gap:8px;}
+#plcdev-workbench-refined .p-inline-check input{min-height:0;width:auto;}
+#plcdev-workbench-refined .p-integration-footer{position:sticky;bottom:0;background:var(--p-surface);padding:10px 0 18px;border-top:1px solid var(--p-line);margin-top:18px;}
+#plcdev-workbench-refined .p-integration-footer .p-project-dialog-actions{margin-top:8px;}
+#plcdev-workbench-refined #p-integration-message{font-size:12px;color:var(--p-muted);line-height:1.5;margin:0;overflow-wrap:anywhere;}
+#plcdev-workbench-refined .t-tool-title[data-provider="fuxa"]>svg{width:24px;height:24px;color:var(--p-teal);}
+@media(max-width:680px){#plcdev-workbench-refined .p-integration-files,#plcdev-workbench-refined .p-oip-bindings{grid-template-columns:1fr;}#plcdev-workbench-refined .p-integration-dialog{padding:16px 16px 0;}#plcdev-workbench-refined #p-configure-project{font-size:11px;padding:6px;}}
+#plcdev-workbench-refined .p-explorer-brand{height:48px;min-height:48px;background:var(--p-surface);gap:10px;}
+#plcdev-workbench-refined .p-explorer-brand h2{font-size:11px;font-weight:400;color:var(--p-muted);margin-left:auto;}
+#plcdev-workbench-refined .p-toolbar{min-height:48px;padding:7px 14px;gap:8px;flex-wrap:nowrap;}
+#plcdev-workbench-refined .p-toolbar .p-context-title{flex:1;min-width:80px;}
+#plcdev-workbench-refined .p-toolbar #p-current-title{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#plcdev-workbench-refined .p-toolbar>.p-icon-button{flex:none;}
+#plcdev-workbench-refined .p-toolbar .p-session{min-height:0;padding:0;border:0;gap:12px;margin-left:8px;flex:none;background:transparent;}
+#plcdev-workbench-refined .p-toolbar .p-execution{font-size:11px;white-space:nowrap;}
+#plcdev-workbench-refined .p-toolbar .p-session-actions{flex-basis:auto;padding:0;gap:6px;}
+#plcdev-workbench-refined .p-catalog-help{margin:0;padding:8px 14px;background:var(--p-soft);flex:none;}
+#plcdev-workbench-refined .p-statusbar{display:flex;align-items:center;gap:10px;min-height:24px;padding:3px 12px;background:var(--p-soft);border-top:1px solid var(--p-line);flex:none;color:var(--p-muted);font-size:10px;}
+#plcdev-workbench-refined .p-statusbar .p-health{font-size:10px;gap:5px;flex:none;white-space:nowrap;}
+#plcdev-workbench-refined .p-statusbar .p-health svg{width:13px;height:13px;}
+#plcdev-workbench-refined .p-statusbar .p-health:empty{display:none;}
+#plcdev-workbench-refined .p-statusbar .p-feedback{padding:0 0 0 10px;border-left:1px solid var(--p-line);background:transparent;min-height:0;flex:1;}
+#plcdev-workbench-refined .p-backend-status{margin-left:auto;flex:none;white-space:nowrap;}
+#plcdev-workbench-refined .p-runtime-summary{padding:10px 16px;border-bottom:1px solid var(--p-line);display:flex;flex-wrap:wrap;gap:10px 30px;color:var(--p-muted);font-size:11px;}
+#plcdev-workbench-refined .p-runtime-summary>div{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;}
+#plcdev-workbench-refined .p-runtime-summary strong{color:var(--p-ink);font-weight:600;}
+#plcdev-workbench-refined .p-runtime-summary .p-project-description,#plcdev-workbench-refined .p-runtime-summary .p-session-target{font-size:11px;margin:0;max-width:none;white-space:normal;}
+@media(max-height:700px) and (min-width:761px){
+ #plcdev-workbench-refined .p-graph,#plcdev-workbench-refined[data-topology="local"] .p-graph{min-height:320px;}
+ #plcdev-workbench-refined .p-node{transform:translateX(-50%);}
+ #plcdev-workbench-refined .p-node[data-node="eez"],#plcdev-workbench-refined .p-node[data-node="plc"]{top:16px;}
+ #plcdev-workbench-refined .p-node[data-node="hmi"]{top:128px;}
+ #plcdev-workbench-refined .p-node[data-node="runtime"]{top:118px;}
+ #plcdev-workbench-refined .p-node[data-node="fio"]{top:102px;}
+ #plcdev-workbench-refined[data-topology="local"] [data-node="plc"]{top:calc(46% - 20px);}
+ #plcdev-workbench-refined[data-topology="local"] [data-node="runtime"]{top:calc(46% - 50px);}
+}
+
+/* Per-project HMI interface editor. Each table scrolls within the dialog. */
+#plcdev-workbench-refined .p-interface-dialog{width:min(1230px,calc(100vw - 28px));padding:20px 24px 0;}
+#plcdev-workbench-refined .p-interface-section-head{display:flex;align-items:center;gap:12px;margin:22px 0 8px;}
+#plcdev-workbench-refined .p-interface-section-head h3{font-size:14px;margin:0;}
+#plcdev-workbench-refined .p-interface-section-head span{font-size:11px;color:var(--p-muted);flex:1;}
+#plcdev-workbench-refined .p-interface-scroll{overflow:auto;border:1px solid var(--p-line);border-radius:6px;max-height:300px;}
+#plcdev-workbench-refined .p-interface-table{border-collapse:collapse;width:100%;min-width:1050px;table-layout:fixed;font-size:11px;}
+#plcdev-workbench-refined .p-interface-table th{padding:8px;background:var(--p-soft);text-align:left;font-weight:500;position:sticky;top:0;z-index:1;}
+#plcdev-workbench-refined .p-interface-table td{padding:5px;border-top:1px solid var(--p-line);vertical-align:middle;}
+#plcdev-workbench-refined .p-interface-table th:nth-child(3){width:185px;}
+#plcdev-workbench-refined .p-interface-table th:nth-child(n+6):nth-child(-n+8){width:65px;}
+#plcdev-workbench-refined .p-interface-table th:last-child{width:60px;}
+#plcdev-workbench-refined .p-interface-table input,#plcdev-workbench-refined .p-interface-table select{min-height:32px;padding:5px;font-size:11px;}
+#plcdev-workbench-refined .p-interface-table .p-interface-check{margin:0;display:flex;flex-direction:row;align-items:center;gap:4px;white-space:nowrap;font-size:10px;}
+#plcdev-workbench-refined .p-interface-check input[type="checkbox"]{width:14px;min-height:14px;height:14px;flex:none;accent-color:var(--p-teal);}
+#plcdev-workbench-refined .p-interface-table .p-button{font-size:10px;padding:5px;}
+#plcdev-workbench-refined .p-interface-operation-table th:nth-child(3){width:80px;}
+#plcdev-workbench-refined .p-interface-operation-table th:nth-child(4){width:180px;}
+#plcdev-workbench-refined .p-interface-operation-table th:nth-child(6){width:95px;}
+#plcdev-workbench-refined .p-interface-operation-table tr[data-enabled="false"]{background:var(--p-soft);}
+#plcdev-workbench-refined .p-interface-empty,#plcdev-workbench-refined .p-interface-summary,#plcdev-workbench-refined #p-interface-message{font-size:12px;color:var(--p-muted);line-height:1.6;margin:7px 0;overflow-wrap:anywhere;}
+#plcdev-workbench-refined .p-interface-summary{color:var(--p-teal);}
+#plcdev-workbench-refined.t-layout-ordered[data-interface-topology="true"] [data-node="eez"],#plcdev-workbench-refined.t-layout-ordered[data-interface-topology="true"] [data-node="hmi"]{--node-x:28%;}
+#plcdev-workbench-refined.t-layout-ordered[data-interface-topology="true"] [data-node="plc"],#plcdev-workbench-refined.t-layout-ordered[data-interface-topology="true"] [data-node="runtime"]{--node-x:70%;}
+@media(max-width:760px){#plcdev-workbench-refined .p-interface-dialog{padding:14px 14px 0;}#plcdev-workbench-refined .p-interface-section-head{flex-wrap:wrap;}#plcdev-workbench-refined .p-interface-section-head span{flex-basis:100%;order:3;}#plcdev-workbench-refined #p-configure-interface{padding:6px;font-size:11px;}}
+
+/* Project-scoped AI task overview, separate from runtime controls. */
+#plcdev-workbench-refined .p-agent-dialog{width:min(700px,calc(100vw - 28px));}
+#plcdev-workbench-refined .p-agent-dialog textarea{font:inherit;resize:vertical;width:100%;min-height:76px;padding:9px 10px;border:1px solid var(--p-line);border-radius:6px;background:var(--p-surface);color:var(--p-ink);}
+#plcdev-workbench-refined .p-agent-dialog textarea:focus-visible{outline:2px solid var(--p-teal);outline-offset:1px;}
+#plcdev-workbench-refined .p-agent-example{margin:4px 0 10px;font-size:11px;}
+#plcdev-workbench-refined .p-agent-dialog .p-agent-basis{display:flex;align-items:flex-start;gap:9px;padding:10px;border:1px solid var(--p-line);border-radius:6px;cursor:pointer;}
+#plcdev-workbench-refined .p-agent-basis input[type="checkbox"]{width:16px;height:16px;min-height:16px;flex:none;margin:2px 0 0;accent-color:var(--p-teal);}
+#plcdev-workbench-refined .p-agent-basis span{font-size:12px;line-height:1.6;}
+#plcdev-workbench-refined .p-agent-basis small{display:block;color:var(--p-muted);font-size:11px;}
+#plcdev-workbench-refined #p-agent-message,#plcdev-workbench-refined #p-agent-revision{font-size:11px;color:var(--p-muted);line-height:1.5;overflow-wrap:anywhere;}
+#plcdev-workbench-refined .p-agent-list-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:22px 0 8px;}
+#plcdev-workbench-refined .p-agent-list-head h3{margin:0;font-size:14px;}
+#plcdev-workbench-refined .p-agent-tasks{display:grid;gap:8px;max-height:32vh;overflow:auto;}
+#plcdev-workbench-refined .p-agent-task{border:1px solid var(--p-line);border-radius:7px;padding:10px 12px;overflow-wrap:anywhere;}
+#plcdev-workbench-refined .p-agent-task-head{display:flex;gap:12px;justify-content:space-between;align-items:center;}
+#plcdev-workbench-refined .p-agent-task-head strong{font-size:12px;color:var(--p-teal);}
+#plcdev-workbench-refined .p-agent-task-head code{font-size:10px;color:var(--p-muted);}
+#plcdev-workbench-refined .p-agent-task p{white-space:pre-wrap;margin:7px 0;font-size:12px;line-height:1.5;}
+#plcdev-workbench-refined .p-agent-task small{margin:0;}
+@media(max-width:760px){#plcdev-workbench-refined #p-agent-open{padding:6px;font-size:11px;}}

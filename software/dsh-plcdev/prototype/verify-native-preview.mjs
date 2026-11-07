@@ -1,0 +1,116 @@
+// Offline native DSH integration checks. JSDOM is not browser layout QA.
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+import { readFile, writeFile } from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
+const packages=createRequire(resolve(root,'software/eez-studio-zh/package.json'));
+const {JSDOM,VirtualConsole}=packages('jsdom');
+const dir=resolve(root,process.argv[2]||'outputs/plcdev-dsh-prototype/20261101-toolchain');
+const html=await readFile(resolve(dir,'plcdev-dsh-prototype.html'),'utf8');
+const key='plcdev-dsh-native-integration-v2';
+const checks=[],errors=[],virtualConsole=new VirtualConsole();
+virtualConsole.on('jsdomError',e=>{if(!e.message.includes('CSS'))errors.push(e.message);});
+const wait=(ms=40)=>new Promise(r=>setTimeout(r,ms));
+function openPage(restored){return new JSDOM(html,{url:'https://prototype.invalid/',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole,beforeParse(win){if(restored)win.localStorage.setItem(key,restored);}});}
+let dom=openPage();await wait(80);
+const doc=()=>dom.window.document;
+const state=()=>JSON.parse(dom.window.localStorage.getItem(key));
+const main=()=>state().sessions.main;
+const task=()=>main().tasks.at(-1);
+async function click(label,scope=doc()){
+  const button=[...scope.querySelectorAll('button')].find(b=>b.textContent.trim()===label||b.getAttribute('aria-label')===label);
+  assert.ok(button,`Button ${label} exists`);assert.equal(button.disabled,false,`Button ${label} is enabled`);button.click();await wait();
+}
+async function clickElement(selector){const e=doc().querySelector(selector);assert.ok(e,selector);e.click();await wait();}
+function check(label,condition){assert.ok(condition,label);checks.push(label);}
+async function submit(value){
+  const input=doc().querySelector('textarea');
+  Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype,'value').set.call(input,value);
+  input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));await wait();await click('发送工程需求');
+}
+try{
+  check('Plugin page opens with three development tools and independent Runtime',doc().querySelectorAll('.ni-tool-card').length===3&&doc().querySelector('.ni-runtime-readiness')&&doc().querySelector('.ni-demo-label').textContent==='演示状态');
+  check('Default example distinguishes ready, stopped and unbound tools',doc().querySelector('[data-tool="openplc"] .ni-tool-badge').textContent==='已就绪'&&doc().querySelector('[data-tool="fuxa"] .ni-tool-badge').textContent==='待启动'&&doc().querySelector('[data-tool="oip"] .ni-tool-badge').textContent==='待关联');
+  await click('查看 OpenPLC 就绪详情');
+  check('Readiness details distinguish compiler availability from candidate validation',doc().querySelector('.ni-tool-detail').textContent.includes('依赖可用')&&doc().querySelector('.ni-tool-detail').textContent.includes('待实际编译'));
+  await click('关闭工具详情');
+  await click('重新检查');
+  check('Readiness refresh has a loading state and disables repeated checks',doc().querySelector('.ni-toolchain').getAttribute('aria-busy')==='true'&&[...doc().querySelectorAll('button')].find(b=>b.textContent==='检查中…').disabled);
+  await wait(720);
+  check('Readiness refresh preserves unresolved service and scene conditions',doc().querySelector('[data-tool="fuxa"] .ni-tool-badge').textContent==='待启动'&&doc().querySelector('[data-tool="oip"] .ni-tool-badge').textContent==='待关联');
+  await click('启动服务（演示）');await wait(770);
+  check('Starting the simulated FUXA service never connects Runtime',doc().querySelector('[data-tool="fuxa"] .ni-tool-badge').textContent==='已就绪'&&doc().querySelector('.ni-runtime-readiness .ni-tool-badge').textContent==='未连接');
+  await click('查看 FUXA 就绪详情');await click('模拟连接异常');
+  check('Failed service is visible and offers retry',doc().querySelector('[data-tool="fuxa"] .ni-tool-badge').textContent==='连接异常'&&doc().querySelector('[data-tool="fuxa"]').textContent.includes('重试连接（演示）'));
+  await click('重试连接（演示）');await wait(770);
+  check('Simulated retry restores FUXA readiness only',doc().querySelector('[data-tool="fuxa"] .ni-tool-badge').textContent==='已就绪'&&doc().querySelector('.ni-runtime-readiness .ni-tool-badge').textContent==='未连接');
+  await click('关联场景');await click('使用输送带示例场景（演示）');
+  check('Scene association completes development readiness while Runtime stays unverified',doc().querySelector('[data-tool="oip"] .ni-tool-badge').textContent==='已就绪'&&doc().querySelector('.ni-toolchain-heading b').textContent==='3 / 3'&&doc().querySelector('.ni-runtime-readiness .ni-tool-badge').textContent==='未连接');
+  await click('运行详情');
+  check('Runtime details keep prepare disabled until separately verified',doc().querySelector('.ni-tool-detail').textContent.includes('未核验')&&[...doc().querySelectorAll('button')].find(b=>b.textContent==='准备运行').disabled);
+  await click('查看 FUXA 就绪详情');await click('模拟连接异常');
+  await click('回到当前会话');await clickElement('.ni-global-nav button');
+  check('Tool readiness survives navigation within the prototype',doc().querySelector('[data-tool="fuxa"] .ni-tool-badge').textContent==='连接异常'&&doc().querySelector('[data-tool="oip"] .ni-tool-badge').textContent==='已就绪');
+  await click('回到当前会话');
+  check('One native composer; review sidebar closed by default',doc().querySelectorAll('textarea').length===1&&!doc().querySelector('.ni-rightbar'));
+  check('Initial result owns project A and saved source version',task().project==='a'&&task().phase==='review'&&doc().querySelector('.ni-card-meta').textContent.includes('v12'));
+  await click('标出插件区域');await click('展开审阅区');
+  check('Four integration zones and native review sidebar are inspectable',doc().querySelectorAll('.ni-plugin-zone').length===4&&doc().querySelector('.ni-rightbar'));
+  await click('逻辑');
+  check('PLC review reflects candidate parameters',doc().querySelector('.ni-ladder').textContent.includes('T#3s')&&doc().querySelector('.ni-ladder').textContent.includes('5'));
+  await click('绑定');
+  check('Bindings reflect the same candidate',doc().querySelector('.ni-binding-table').textContent.includes('HMI 目标 5 件'));
+  await click('保留候选');
+  check('Keep retains candidate without changing saved source version',task().phase==='kept'&&doc().querySelector('.ni-card-meta').textContent.includes('v12'));
+  await click('撤销保留');check('Undo returns candidate to review',task().phase==='review');
+  await click('关闭审阅栏');await submit('目标改为 8 件，延时 0 秒');
+  check('Native composer updates the same project candidate',task().phase==='generating'&&task().target===8&&task().delay===0&&main().tasks.length===1);
+  await click('停止当前 AI 轮次');const pausedStep=task().step;await wait(1100);
+  check('Native stop pauses AI progress; Runtime remains disconnected',task().phase==='paused'&&task().step===pausedStep&&doc().querySelector('.ni-runtime-chip').textContent==='Runtime 未连接');
+  await click('继续候选生成');await wait(3800);
+  check('Resume finishes without forcing review sidebar open',task().phase==='review'&&!doc().querySelector('.ni-rightbar'));
+  await click('审阅这组成果');
+  check('Updated HMI uses target eight and zero delay',doc().querySelector('.ni-hmi-metrics').textContent.includes('/ 08')&&task().delay===0);
+  await click('预演画面');await wait(4700);
+  check('Preview animation reaches its target without changing Runtime',doc().querySelector('.ni-hmi-metrics strong').textContent.includes('08/ 08')&&doc().querySelector('.ni-runtime-chip').textContent.includes('未连接'));
+  await click('重置');
+  check('Preview reset clears only simulated count',doc().querySelector('.ni-hmi-metrics strong').textContent.includes('00/ 08')&&task().target===8);
+  await click('拓扑');
+  check('Topology separates runtime and AI lifecycle',doc().querySelector('.ni-runtime-explanation').textContent.includes('不发送 PLC 停止指令')&&doc().querySelector('.ni-topology-diagram').textContent.includes('未连接'));
+  await clickElement('.ni-context-dock > button');await clickElement('.ni-bind-menu button:nth-of-type(2)');
+  check('Rebinding changes future requests; old result and review remain project A',main().binding==='b'&&task().project==='a'&&doc().querySelector('.ni-review-title').textContent.includes('输送带 A 线'));
+  await clickElement('.ni-runtime-chip');
+  check('Bound project runtime status never opens a different project result',doc().querySelector('[role="status"]').textContent.includes('输送带 B 线尚未建立运行会话')&&doc().querySelector('.ni-review-title').textContent.includes('输送带 A 线'));
+  await clickElement('.ni-global-nav button');
+  check('Tool service state follows project binding; B is independent of A failure',doc().querySelector('.ni-toolchain-heading p').textContent.includes('输送带 B 线')&&doc().querySelector('[data-tool="fuxa"] .ni-tool-badge').textContent==='已就绪');
+  await click('回到当前会话');
+  await click('关闭审阅栏');await submit('目标改为 4 件');await wait(3800);
+  check('New project B request preserves the distinct A result',main().tasks.length===2&&task().project==='b'&&task().target===4&&main().tasks[0].project==='a'&&main().tasks[0].target===8);
+  await click('审阅这组成果',doc().querySelector('.ni-artifact-card'));
+  check('Historical card reads its own project and parameters',doc().querySelector('.ni-review-title').textContent.includes('输送带 A 线')&&doc().querySelector('.ni-hmi-metrics').textContent.includes('/ 08'));
+  await click('关闭审阅栏');await click('新会话');
+  check('Second native session starts unbound and empty',state().sessions.second.binding===null&&state().sessions.second.tasks.length===0&&doc().querySelector('.ni-empty'));
+  await clickElement('.ni-global-nav button');
+  check('Unbound session does not inherit another project readiness',doc().querySelector('.ni-toolchain-heading b').textContent==='0 / 3'&&doc().querySelector('[data-tool="fuxa"] .ni-tool-action').disabled&&doc().querySelector('[data-tool="oip"] .ni-tool-action').disabled);
+  await click('回到当前会话');
+  await submit('目标改为 6 件');
+  check('Unbound requests require context before creating tasks',state().sessions.second.tasks.length===0&&doc().querySelector('.ni-bind-menu'));
+  await clickElement('.ni-bind-menu button:nth-of-type(2)');await click('发送工程需求');await wait(3800);
+  check('Second session keeps its own task without affecting first session',state().sessions.second.tasks[0].target===6&&main().tasks.length===2&&task().target===4);
+  await clickElement('.ni-sessions button:first-child');
+  check('Returning restores first session binding and result list',doc().querySelector('.ni-title-row h1').textContent==='输送带批次计数'&&doc().querySelectorAll('.ni-artifact-card').length===2&&main().binding==='b');
+  await click('轨迹');await click('查看成果');
+  check('Native trajectory opens the same latest engineering result',doc().querySelector('.ni-review-title').textContent.includes(task().id)&&doc().querySelector('.ni-review-title').textContent.includes('输送带 B 线'));
+  await click('关闭审阅栏');await submit('目标改为 9 件');
+  const persisted=dom.window.localStorage.getItem(key);dom.window.close();dom=openPage(persisted);await wait(80);
+  check('Reopen retains sessions and pauses interrupted generation',task().phase==='paused'&&task().target===9&&state().sessions.second.tasks[0].target===6&&main().tasks[0].target===8);
+  await clickElement('.ni-global-nav button');
+  check('Engineering home manages projects without duplicate composer',doc().querySelector('.ni-engineering-home')&&!doc().querySelector('textarea'));
+  await click('回到当前会话');
+  check('Engineering home returns to same native session',doc().querySelectorAll('textarea').length===1&&doc().querySelectorAll('.ni-artifact-card').length===2);
+  check('No script errors',errors.length===0);
+  await writeFile(resolve(dir,'interaction-checks.json'),JSON.stringify({date:'2026-11-01',scope:'Offline React interaction checks in JSDOM; no real browser layout, production DSH extension, AI, compiler, Runtime or hardware validation',passed:checks.length,checks,errors},null,2));
+  process.stdout.write(JSON.stringify({passed:checks.length,errors,report:resolve(dir,'interaction-checks.json')})+'\n');
+}finally{dom.window.close();}

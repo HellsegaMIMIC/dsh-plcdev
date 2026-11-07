@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "version": "0.5.0",
+  "status": "development-preview",
+  "publicationAuthorized": true,
+  "repository": "https://github.com/HellsegaMIMIC/dsh-plcdev",
+  "exampleProjectsIncluded": false,
+  "license": "GPL-3.0-only",
+  "proposedLicense": "GPL-3.0-only",
+  "sourceChecksPassed": true,
+  "releaseTag": "v0.5.0-preview.1",
+  "limitations": [
+    "Clean-machine integrated installation unverified",
+    "Custom OpenPLC build/source prerequisites remain external",
+    "No hardware, timing or classroom acceptance"
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "repositoryName": "dsh-plcdev",
+  "version": "0.5.0",
+  "distribution": "source-development-preview",
+  "license": "GPL-3.0-only",
+  "proposedLicense": "GPL-3.0-only",
+  "directories": [
+    "software/dsh-plcdev",
+    "software/workbench",
+    "software/fuxa-integration"
+  ],
+  "toolSeeds": [
+    "plcdev_workbench",
+    "agent_task_service",
+    "run_fuxa",
+    "install_fuxa",
+    "workbench_agent_bootstrap",
+    "plcdev_environment",
+    "verify_source_release",
+    "manage_workbench_projects"
+  ],
+  "toolFiles": [
+    "tools/plcdev_environment.ps1",
+    "software/workbench/Start-PLCdev.cmd",
+    "tools/install_dsh_workbench.ps1",
+    "tools/start_dsh_workbench.ps1",
+    "tools/restart_dsh_owned_host.ps1",
+    "tools/fuxa_native_permission_gate.cjs",
+    "tools/fuxa_native_permission_oracle.cjs",
+    "tools/fuxa_permission_engine.json"
+  ],
+  "configFiles": [
+    "config/dsh-host.package-lock.json",
+    "config/fuxa.package-lock.json",
+    "config/workbench-python.lock.txt",
+    "config/dsh-public-release.json"
+  ],
+  "extraFiles": [
+    "software/workbench-agent/requirements-lock.txt"
+  ],
+  "runtimeSourceDirectories": [],
+  "allowedSuffixes": [
+    ".py",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".ts",
+    ".tsx",
+    ".css",
+    ".html",
+    ".json",
+    ".yml",
+    ".yaml",
+    ".txt",
+    ".png",
+    ".svg"
+  ],
+  "excludedParts": [
+    ".git",
+    ".tools",
+    ".agents",
+    ".codex",
+    "outputs",
+    "node_modules",
+    "__pycache__",
+    "build",
+    "lib",
+    "teaching-cases",
+    "project-interface-demo",
+    "simulation"
+  ],
+  "excludedNames": [
+    "artifact-provenance.json",
+    "AGENTS.md",
+    "README.md",
+    "controller.json",
+    "service.json",
+    "dsh-launch.json",
+    "team-model-scope.json",
+    ".dsh-write-probe.txt"
+  ],
+  "publicationGates": [
+    "Owner GitHub account and successful authorized publication",
+    "Third-party attribution and release source privacy checks",
+    "Development preview: fresh-machine full installation remains unverified",
+    "Custom OpenPLC CLI/source prerequisites are documented, not bundled"
+  ],
+  "runtimeSourceFiles": [
+    "software/factoryio/runtime_monitor.py",
+    "software/factoryio/editor_runtime_monitor.py",
+    "software/factoryio/editor_runtime_guard.py",
+    "software/factoryio/editor_runtime_inputs.py",
+    "software/hmi-batch/batch_runtime_monitor.py",
+    "software/fuxa-oip/batch_adapter.py"
+  ],
+  "exampleProjectsIncluded": false
+}

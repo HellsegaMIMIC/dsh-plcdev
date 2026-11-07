@@ -1,0 +1,27 @@
+name: Source checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  offline-software-checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '25'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm test
+      - run: python -B -X utf8 -m unittest discover -s tools -p test_project_interface.py
+      - run: python -B -X utf8 -m unittest discover -s tools -p test_plcdev_environment.py
+      - run: python -B -X utf8 -m unittest discover -s tools -p test_workbench_empty_catalog.py
+      - run: python -B -X utf8 -m unittest discover -s tools -p test_verify_source_release.py
+      - run: python -B -X utf8 -m unittest discover -s tools -p test_workbench_fuxa_oip.py
+      - run: python -B -X utf8 tools/verify_source_release.py .

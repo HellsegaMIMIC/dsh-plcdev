@@ -1,0 +1,15 @@
+- insert:
+    - id: plcdev-agent-team
+      name: '@deepseek-ai/dsh-experimental-agent-team'
+      disabled: !!js process.env.PLCDEV_DSH_TEAMS !== '1'
+      config:
+        maxMembers: 4
+        maxTasks: 32
+    - id: plcdev-ui-agent-team
+      name: '@deepseek-ai/dsh-experimental-client-ui-agent-team'
+      disabled: !!js process.env.PLCDEV_DSH_TEAMS !== '1'
+    - id: dsh-plcdev
+      name: dsh-plcdev
+      config:
+        controllerFile: !!js process.env.PLCDEV_DSH_CONTROLLER
+        projectRoot: !!js process.env.PLCDEV_DSH_ROOT
