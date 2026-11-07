@@ -7,7 +7,7 @@ import plcdev_environment as app
 class EnvironmentTests(unittest.TestCase):
     def setUp(self):
         self.original_environment=dict(os.environ)
-        self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);(self.root/'config').mkdir()
+        self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name).resolve();(self.root/'config').mkdir()
         self.defaults={'schemaVersion':1,'tools':{'editor':'tools space/editor.exe','node':None,'python':None},'state':{'runtimeOwnerDirectory':'state'}}
         self.write(self.root/'config/environment.defaults.json',self.defaults)
         self.env=patch.dict(os.environ,{},clear=True);self.env.start()

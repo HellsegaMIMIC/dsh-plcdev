@@ -19,13 +19,13 @@
       "check": "plugin-tests",
       "exitCode": 0,
       "testCount": 188,
-      "logSha256": "a15fd9a0ac83393407740719307ffd7f4921d740d853cb8cfec914c94f0c2ec0"
+      "logSha256": "5567dc6cbf0130477f050b8aa09ac9712c7a0a30170368402b458724ae7b9847"
     },
     {
       "check": "project_interface",
       "exitCode": 0,
       "testCount": 25,
-      "logSha256": "fdb65a39139cc034a84f22c239823445d2f58f40560271d973ac583c827274c1"
+      "logSha256": "7474897e351875832d91f86a645ce4ae2d0396dfb39a89127162a5c607dba91a"
     },
     {
       "check": "plcdev_environment",
@@ -37,7 +37,7 @@
       "check": "workbench_empty_catalog",
       "exitCode": 0,
       "testCount": 3,
-      "logSha256": "9857006f04090d95e7715c7793520fc5570257978dec299f8ac378215210cdf6"
+      "logSha256": "cedb77a346633d6137037f24ae44f0742025ff72ce57da4a9a4ce90e773683a8"
     },
     {
       "check": "verify_source_release",
@@ -49,13 +49,13 @@
       "check": "workbench_fuxa_oip",
       "exitCode": 0,
       "testCount": 28,
-      "logSha256": "aa44f2196cfcf7d694c841a05730520a43808b7833dcf65059069c50cafb2d54"
+      "logSha256": "24a69d00ecc2b1cc52caca93ac22cc1eb09f23b77aecfd7a7dd9cd89e98ae695"
     },
     {
       "check": "source-audit",
       "exitCode": 0,
       "testCount": null,
-      "logSha256": "83ddf78b80d765dc177eb74a02655e36f950d6011a6e13a7e4248aee730b5273"
+      "logSha256": "e30a61d9e481a86948fbb1662d45fda1011c96724cd4913e174d6d968d45c6b7"
     }
   ],
   "examplesIncluded": false,

@@ -1,4 +1,4 @@
-# v0.5.0-preview.1
+# v0.5.0-preview.2
 
 DSH PLCdev Workbench source development preview, licensed GPL-3.0-only.
 

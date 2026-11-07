@@ -8,7 +8,7 @@
   "license": "GPL-3.0-only",
   "proposedLicense": "GPL-3.0-only",
   "sourceChecksPassed": true,
-  "releaseTag": "v0.5.0-preview.1",
+  "releaseTag": "v0.5.0-preview.2",
   "limitations": [
     "Clean-machine integrated installation unverified",
     "Custom OpenPLC build/source prerequisites remain external",
