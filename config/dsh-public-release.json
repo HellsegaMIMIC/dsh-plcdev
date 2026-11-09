@@ -20,6 +20,11 @@
     "verify_source_release",
     "manage_workbench_projects"
   ],
+  "testSeeds": [
+    "test_dsh_decoupling_backend",
+    "test_workbench_joint_candidate",
+    "test_workbench_agent_adapters"
+  ],
   "toolFiles": [
     "tools/plcdev_environment.ps1",
     "software/workbench/Start-PLCdev.cmd",

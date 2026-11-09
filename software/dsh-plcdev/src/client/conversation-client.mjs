@@ -44,7 +44,8 @@ export function readConversationPending(storage, conversationId) {
 }
 export function recoverConversationRequest(value,conversationId) {
   if(value?.conversationId !== conversationId || !projectPattern.test(value?.projectId || '') || !Number.isSafeInteger(value?.expectedVersion) || value.expectedVersion<0 || value.executionScope!=='proposal' || value.sourceBasis!=='saved_revision' || !/^[0-9a-f]{64}$/.test(value.expectedRevision||'') || !/^[A-Za-z0-9_-]{1,100}$/.test(value.clientRequestId||''))return null;
-  try{return conversationTaskRequest({conversationId,projectId:value.projectId,version:value.expectedVersion},{request:value.request,revision:value.expectedRevision,consent:true,clientRequestId:value.clientRequestId,workflow:value.workflow});}catch{return null;}
+  if(value.revisionParent&&(!taskPattern.test(value.revisionParent.taskId||'')||!/^[0-9a-f]{64}$/.test(value.revisionParent.candidateDigest||'')||!/^[A-Za-z0-9_-]{1,100}$/.test(value.revisionIntentId||'')))return null;
+  try{return {...conversationTaskRequest({conversationId,projectId:value.projectId,version:value.expectedVersion},{request:value.request,revision:value.expectedRevision,consent:true,clientRequestId:value.clientRequestId,workflow:value.workflow}),...(value.planSubmission?{planSubmission:value.planSubmission}:{}),...(value.revisionParent?{revisionParent:value.revisionParent,revisionIntentId:value.revisionIntentId}:{})};}catch{return null;}
 }
 export function clearConversationPending(storage, conversationId) {storage.removeItem(PENDING_PREFIX+conversationId);}
 export function reviewTarget(value) {
@@ -181,7 +182,7 @@ export function readReviewPending(storage,conversationId,target){
 export async function conversationApi(path, body, timeout = 15000) {
   const controller=new AbortController(); const timer=setTimeout(()=>controller.abort(),timeout);
   try {
-    const response=await fetch('/api/plcdev/'+path,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,credentials:'same-origin',cache:'no-store',signal:controller.signal});
+    const response=await fetch('/api/plcdev/'+path,{method:body?'POST':'GET',headers:{...(body?{'Content-Type':'application/json'}:{}),...(globalThis.location?.protocol==='dsh-app:'?{'X-PLCdev-Desktop':'1'}:{})},body:body?JSON.stringify(body):undefined,credentials:'same-origin',cache:'no-store',signal:controller.signal});
     const value=await response.json().catch(()=>null);
     if(!response.ok){const error=new Error(value?.error||value?.message||`PLCdev 请求失败（${response.status}）`);error.httpStatus=response.status;throw error;}
     if(!value || typeof value!=='object') throw new Error('PLCdev 未返回有效响应。');
@@ -195,7 +196,7 @@ export function createConversationNavigation() {
   return {
     snapshot:()=>intent,
     subscribe(listener){listeners.add(listener);return ()=>listeners.delete(listener);},
-    request(value){const target=reviewTarget(value); if(!projectPattern.test(value?.projectId||''))return;intent={projectId:value.projectId,...(target?{taskId:target.taskId}:{}),nonce:Date.now()};listeners.forEach(fn=>fn());},
+    request(value){const target=reviewTarget(value); if(!projectPattern.test(value?.projectId||''))return;intent={...(validConversationId(value?.sessionId)?{sessionId:value.sessionId}:{}),projectId:value.projectId,...(target?{taskId:target.taskId}:{}),nonce:Date.now()};listeners.forEach(fn=>fn());},
     clear(value){if(intent===value){intent=null;listeners.forEach(fn=>fn());}},
   };
 }

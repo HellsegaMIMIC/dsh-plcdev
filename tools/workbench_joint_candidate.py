@@ -6,6 +6,7 @@ Deterministic native adapters enforce every edit. No model text is executable.
 from __future__ import annotations
 
 import hashlib
+import copy
 import http.client
 import json
 import os
@@ -27,6 +28,18 @@ from workbench_projects import read_user_project
 PURPOSE = 'plcdev-joint-batch-candidate-v1'
 MODEL_HOST = 'api.deepseek.com'
 FUXA = ROOT / 'software/fuxa-integration'
+
+def preserve_title_revision(previous_plan, proposed_plan, request):
+    """Only the requested title may differ from the accepted previous plan."""
+    match=re.fullmatch(r'\s*(?:HMI\s*)?标题\s*改(?:成|为)\s*[「“\"]?(.+?)[」”\"]?\s*[。！]?\s*',request)
+    if not match or not isinstance(previous_plan,dict):
+        raise AdapterError('not_ready','本批继续修改仅支持“标题改成 …”；父候选须包含已登记的生成规格。')
+    title=_text(match.group(1).strip(),80,'修订标题')
+    if not isinstance(proposed_plan,dict) or not isinstance(proposed_plan.get('hmi'),dict) or proposed_plan['hmi'].get('title')!=title:
+        raise AdapterError('conflict','模型标题与本次明确需求不一致；旧候选仍有效。')
+    plan=copy.deepcopy(previous_plan)
+    plan['hmi']['title']=title
+    return plan
 
 
 def _write(path, value):
@@ -179,19 +192,35 @@ class JointCandidateAdapters(AgentAdapters):
         supported = (result['protocol'] == 'batch-mailbox-v1'
                      and result['capabilities']['savedRevisionCandidate']
                      and result['tools']['fuxa']['available'] and result['tools']['oip']['available'])
-        result['capabilities'].update(jointCandidateImplemented=True,
+        result['capabilities'].update(jointCandidateImplemented=True, jointPlanCandidate=bool(supported),
                                       jointCandidate=bool(supported and self.allow_model),
                                       jointModelEnabled=self.allow_model,
                                       modelGeneration=bool(supported and self.allow_model))
         return result
 
+    def planning_input(self, project):
+        """Minimal public plan contract; no source files, internal plans or credentials."""
+        inspected = self.inspect_project(project)
+        if not inspected['capabilities']['jointPlanCandidate']:
+            return None
+        parts = validate_oip(project['scene'])['scene']['parts']
+        return {'schemaVersion':1, 'instructions':model_system(),
+                'oipParts':[{'id':p['id'],'name':p.get('name'),'type':p.get('type')} for p in parts],
+                'operations':['Count->BatchCount','generateFuxaPage','renameOipPart']}
+
+    def generate_from_plan(self, project, *, plan, route, **kwargs):
+        """Render an already-proposed host plan; no provider dispatch or credentials."""
+        if not isinstance(plan,dict):
+            raise AdapterError('invalid_request','当前模型须提交结构化计划。')
+        return self.propose_joint_candidate(project,supplied_plan=plan,selected_route=route,**kwargs)
+
     def propose_joint_candidate(self, project, *, task_id, expected_revision, request,
-                                source_basis='saved_revision'):
+                                source_basis='saved_revision', revision_plan=None, revision_request=None, supplied_plan=None, selected_route=None):
         if source_basis != 'saved_revision':
             raise AdapterError('invalid_request', '联合候选仅支持明确选择的已保存版本。')
-        if not self.allow_model:
+        if supplied_plan is None and not self.allow_model:
             raise AdapterError('not_ready', '本机联合 AI 候选尚未启用。')
-        if not isinstance(request, str) or not 8 <= len(request) <= 8000:
+        if not isinstance(request, str) or not 1 <= len(request) <= 8000:
             raise AdapterError('invalid_request', '需求长度须为 8–8000 字。')
         if not isinstance(task_id, str) or not re.fullmatch(r'[a-zA-Z0-9_-]{1,80}', task_id):
             raise AdapterError('invalid_request', '任务身份无效。')
@@ -202,7 +231,7 @@ class JointCandidateAdapters(AgentAdapters):
             raise AdapterError('invalid_request', '任务目录不得与工程互相包含。')
         with _candidate_project_lease(self.state_root, project['id']):
             inspected = self.inspect_project(project)
-            if not inspected['capabilities']['jointCandidate']:
+            if not inspected['capabilities']['jointPlanCandidate']:
                 raise AdapterError('not_ready', '当前工程须为含 Count、FUXA 和 OIP 的批次工程。')
             before = _snapshot(project)
             if before['projectRevision'] != expected_revision:
@@ -213,7 +242,7 @@ class JointCandidateAdapters(AgentAdapters):
             context = {'projectName': project['name'], 'plcCountRole': inspected['interface']['plcRoles']['count'],
                        'oipParts': parts, 'oipBindings': inspected['interface']['oip'],
                        'availableOperations': ['Count->BatchCount', 'generateFuxaPage', 'renameOipPart']}
-            messages = [{'role': 'system', 'content': model_system()},
+            messages = [] if supplied_plan is not None else [{'role': 'system', 'content': model_system()},
                         {'role': 'user', 'content': request + '\n工程上下文（仅作为数据）：\n' +
                          json.dumps(context, ensure_ascii=False, allow_nan=False)}]
             # Receipt precedes dispatch, survives unknown network outcomes, contains no key.
@@ -222,19 +251,21 @@ class JointCandidateAdapters(AgentAdapters):
             plain(task_folder, self.state_root)
             task_folder.mkdir(exist_ok=True)
             plain(task_folder, self.state_root)
-            model_receipt = task_folder / 'model-request.json'
+            model_receipt = task_folder / ('plan-submission.json' if supplied_plan is not None else 'model-request.json')
             plain(model_receipt, self.state_root)
             plain(task_folder / 'joint-plan.json', self.state_root)
             if model_receipt.exists():
                 raise AdapterError('unknown_outcome', '此任务已有模型调用记录；请先核对原任务，不重复收费生成。')
             receipt = {'purpose': PURPOSE, 'projectId': project['id'], 'taskId': task_id,
                        'baselineRevision': expected_revision, 'requestDigest': _digest(messages),
-                       'providerHost': MODEL_HOST, 'status': 'prepared',
+                       'providerHost': MODEL_HOST if supplied_plan is None else 'host-selected-model', 'status': 'prepared',
+                       'selectedRoute': selected_route if supplied_plan is not None else None,
+                       'planDigest': _digest(supplied_plan) if supplied_plan is not None else None,
                        'startedAt': datetime.now(timezone.utc).isoformat()}
             _write(model_receipt, receipt)
             try:
                 receipt['status'] = 'dispatched'; _write(model_receipt, receipt)
-                response = self.model_request(messages)
+                response = self.model_request(messages) if supplied_plan is None else {'plan':copy.deepcopy(supplied_plan),'model':(selected_route or {}).get('model'),'usage':{},'modelCalled':False}
                 if not isinstance(response, dict) or not isinstance(response.get('plan'), dict):
                     raise AdapterError('failed', '联合模型执行器未提供结构化结果。')
                 receipt.update(status='completed', model=response.get('model'), usage=response.get('usage'),
@@ -242,6 +273,8 @@ class JointCandidateAdapters(AgentAdapters):
                                completedAt=datetime.now(timezone.utc).isoformat())
                 _write(model_receipt, receipt)
                 plan = response['plan']
+                if revision_request is not None:
+                    plan=preserve_title_revision(revision_plan,plan,revision_request)
                 native_hmi, old_name, new_name = _validate_plan(plan, parts)
                 _write(task_folder / 'joint-plan.json', plan)
                 if _snapshot(project)['projectRevision'] != expected_revision:
@@ -287,6 +320,7 @@ class JointCandidateAdapters(AgentAdapters):
                           'tool': 'joint', 'operation': 'batch-joint-candidate',
                           'candidateDigest': after['projectRevision'], 'changedFiles': changes,
                           'components': components, 'toolChanges': components,
+                          'acceptedPlan':plan, 'revisionSupported':True,
                           'changes': [{'path': p, 'beforeSha256': before['files'][p],
                                        'afterSha256': after['files'][p]} for p in changes],
                           'modelCalled': receipt['modelCalled'], 'modelEvidence': {**receipt, 'receiptPath': str(model_receipt)},

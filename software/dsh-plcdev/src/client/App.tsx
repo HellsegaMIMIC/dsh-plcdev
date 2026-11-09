@@ -1,3 +1,4 @@
+import {conversationApi as api} from './conversation-client.mjs';
 import React, { useEffect, useRef, useState } from 'react';
 import { createReadGate, validateSnapshot, validateTasks, readPending, persistPending, makeCandidateRequest, definitiveFailure, candidateIdentity, canUseTool, externalRuntimeOwner, runtimeOwnerLabel, graphEntities, connectionLabel, taskStatus, selectionKey } from './model.mjs';
 import { openplcLogo, eezLogo } from './assets';
@@ -9,16 +10,6 @@ function storage() { try { return window.localStorage; } catch { return memorySt
 function initialProject() { try { return storage().getItem(selectionKey) || ''; } catch { return ''; } }
 const short = (value: any) => String(value || '').replace(/\\/g, '/').split('/').pop();
 const phaseLabel: any = { idle: '尚未准备', building: '编译准备中', ready: '实例就绪', stopping: '正在结束', ended: '已结束', fault: '需要处理' };
-async function api(path: string, body?: any, timeout = 15000) {
-  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeout);
-  try {
-    const response = await fetch('/api/plcdev/' + path, { method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, signal: controller.signal, cache: 'no-store', credentials: 'same-origin' });
-    const data = await response.json().catch(() => null);
-    if (!response.ok) { const error: any = new Error(data?.error || data?.message || '服务请求失败（' + response.status + '）'); error.httpStatus = response.status; throw error; }
-    if (!data) throw new Error('服务未返回有效 JSON 数据。');
-    return data;
-  } finally { clearTimeout(timer); }
-}
 function Glyph({ kind = 'project', size = 24 }: { kind?: string; size?: number }) {
   const paths: any = { project: 'M3 20V5h6l2 3h10v12Z', runtime: 'M6 6h12v12H6ZM9 9h6v6H9ZM8 2v4m8-4v4M8 18v4m8-4v4M2 8h4m-4 8h4m12-8h4m-4 8h4', scene: 'M3 16h18v5H3Zm3-8h5v6H6Zm8-5h5v11h-5M6 18v1m4-1v1m4-1v1m4-1v1', hmi: 'M3 3h18v14H3ZM12 17v4m-5 0h10M6 7h6m-6 4h3m4-4h5v6h-5', fuxa: 'M4 21V3h16M4 11h13', link: 'M3 7h18m-4-4 4 4-4 4M21 17H3m4-4-4 4 4 4', tasks: 'M6 3h15v18H6ZM3 7h6m-6 5h6m-6 5h6M12 7h6m-6 5h6m-6 5h6', open: 'M14 3h7v7M21 3 10 14M10 3H4v17h17v-6' };
   if (kind === 'plc' || kind === 'eez') return <img className="pd-logo" width={size} height={size} src={kind === 'plc' ? openplcLogo : eezLogo} alt="" />;

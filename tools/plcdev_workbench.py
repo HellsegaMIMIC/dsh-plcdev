@@ -672,9 +672,9 @@ def agent_tasks(manager, project_id, body=None, *, connect=None, call=None):
             if any(not isinstance(task, dict) or task.get('projectId') != project_id for task in listing['tasks']):
                 raise AgentGatewayError('任务服务返回了其他工程的任务，已拒绝显示。', 503)
             return {'ok':True, 'projectId':project_id, 'projectRevision':revision,
-                    'tasks':listing['tasks'], 'capabilities':inspection.get('capabilities', {})}
+                    'tasks':listing['tasks'], 'capabilities':inspection.get('capabilities', {}), 'planningInput':inspection.get('planningInput')}
         required={'projectId','request','expectedRevision','executionScope','clientRequestId'}
-        if not required.issubset(body) or set(body)-required-{'sourceBasis','workflow'} or body.get('sourceBasis','editor_current') not in ('editor_current','saved_revision') or body.get('projectId') != project_id or body.get('executionScope') != 'proposal':
+        if not required.issubset(body) or set(body)-required-{'sourceBasis','workflow','revisionParent','planSubmission'} or body.get('sourceBasis','editor_current') not in ('editor_current','saved_revision') or body.get('projectId') != project_id or body.get('executionScope') != 'proposal':
             raise AgentGatewayError('无效的候选任务请求。', 400)
         payload = dict(body);payload['executionScope'] = 'generate_only'
         result = call(descriptor, '/v1/tasks', payload)
@@ -836,7 +836,7 @@ def serve():
                         except Exception:self.reply(409,{'ok':False,'error':'model-configuration-unavailable'})
                         return
                     if self.path in ('/api/agent/tasks','/api/agent/tasks/open','/api/agent/tasks/review'):
-                        if not 0<length<=16384:raise AgentGatewayError('请求过长。',400)
+                        if not 0<length<=131072:raise AgentGatewayError('请求过长。',400)
                         body=json.loads(self.rfile.read(length))
                         if not isinstance(body,dict):raise AgentGatewayError('无效请求。',400)
                         result=agent_tasks(manager,body.get('projectId'),body) if self.path=='/api/agent/tasks' else agent_review_candidate(manager,body) if self.path=='/api/agent/tasks/review' else agent_open_candidate(manager,body)

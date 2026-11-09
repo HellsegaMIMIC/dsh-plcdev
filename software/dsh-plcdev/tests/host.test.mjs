@@ -32,7 +32,7 @@ function send(base, route, { method = 'GET', headers = {}, body } = {}) {
     request.end(body);
   });
 }
-async function fixture(t) {
+async function fixture(t, admission) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'plcdev-dsh-host-'));
   const upstreamCalls = [];
   let ticks = 0;
@@ -73,8 +73,11 @@ async function fixture(t) {
   const base = 'http://127.0.0.1:' + server.address().port;
   const config = { projectRoot: root, controllerFile: descriptorPath };
   const ctx = {
+    on() { return () => {}; },
+    systemPrompt: { context() { return () => {}; } },
+    sessionProjections: { stateOf() { return undefined; } },
     // Base-profile fixture intentionally has no optional native Teams service.
-    inject() { return () => {}; },
+    inject(names,fn) { if(names.length===1&&names[0]==='connection'&&admission)fn({connection:{admit:admission},effect:ctx.effect});return () => {}; },
     tools: { register() { return () => {}; } },
     llm: { registerAdapter() { return () => {}; } },
     effect(effect) { const dispose = effect(); if (typeof dispose === 'function') disposers.push(dispose); },
@@ -179,4 +182,17 @@ test('plugin unload unregisters routes only; independent controller remains aliv
   assert.equal(reopened.status, 200); assert.notEqual(reopened.body.hostInstance, first.body.hostInstance);
   assert.equal(reopened.body.instance, first.body.instance);
   assert.equal(f.upstreamCalls.some(call => call.path === '/api/action'), false);
+});
+
+
+test('desktop write requires authenticated owner and retains source fence',async t=>{
+ const f=await fixture(t,req=>req.headers.cookie==='fixture-owner'?{peer:{principal:{kind:'owner'},signal:{aborted:false}}}:{rejection:401});
+ const route='/api/plcdev/conversations/bind',body=JSON.stringify({conversationId:'native-chat',projectId:A,expectedVersion:0});
+ const headers={'Content-Type':'application/json','X-PLCdev-Desktop':'1'};
+ assert.equal((await f.request(route,{method:'POST',headers,body})).status,403);
+ assert.equal((await f.request(route,{method:'POST',headers:{...headers,Cookie:'fixture-owner',Origin:'https://evil.example'},body})).status,403);
+ assert.equal((await f.request(route,{method:'POST',headers:{...headers,Cookie:'fixture-owner','Sec-Fetch-Site':'cross-site'},body})).status,403);
+ const result=await f.request(route,{method:'POST',headers:{...headers,Cookie:'fixture-owner'},body});
+ assert.equal(result.status,200);assert.equal(result.body.projectId,A);assert.equal(result.body.version,1);
+ assert.equal((await f.request(route,{method:'POST',headers:{...headers,Cookie:'fixture-owner'},body})).status,409);
 });

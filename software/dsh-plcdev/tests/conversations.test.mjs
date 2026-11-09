@@ -79,6 +79,39 @@ async function fixture(t) {
   return { routes, read, open, state, tasks, ledger, calls, posts };
 }
 
+test('revision intent survives reopen, claims one turn and preserves parent identity on unknown replay',async t=>{
+ const f=await fixture(t);await f.routes.handle('POST',BIND,binding());const first=await f.routes.handle('POST',SUBMIT,submission());
+ const task=f.tasks.get(first.body.task.taskId);Object.assign(task,{workflow:'joint-ai-v1',request:'标题为 5',projectRevision:REVISION,candidate:{revisionSupported:true,candidateDigest:'d'.repeat(64),summary:{after:'标题 5'}}});
+ // The fixture exposes task values; its list includes no revision until augmented below.
+ const root=await mkdtemp(path.join(os.tmpdir(),'plcdev-revision-'));
+ const bridge={async handle(method,url,body){if(method==='GET'&&url.includes('/tasks?'))return {status:200,body:{projectId:A,projectRevision:REVISION,tasks:[task]}};if(method==='GET')return {status:200,body:{project:{id:A},projects:[{id:A}]}};return {status:503,body:{code:'unknown'}};}};
+ const routes=createConversationRoutes({controllerFile:path.join(root,'controller.json'),bridge});
+ t.after(async()=>{assert.ok(path.basename(root).startsWith('plcdev-revision-'));await rm(root,{recursive:true,force:true});});
+ await routes.handle('POST',BIND,binding());
+ // Reference using the public submission path, then switch upstream to the existing candidate.
+ bridge.handle=async(method,url,body)=>method==='POST'?{status:202,body:{ok:true,task}}:url.includes('/tasks?')?{status:200,body:{projectId:A,projectRevision:REVISION,tasks:[task]}}:{status:200,body:{project:{id:A},projects:[{id:A}]}};
+ await routes.handle('POST',SUBMIT,submission());
+ const arm={conversationId:'conversation-a',projectId:A,taskId:task.taskId,candidateDigest:'d'.repeat(64),expectedRevision:REVISION,expectedVersion:1,intentId:'revision-1'};
+ assert.equal((await routes.handle('POST',GET+'/revision',arm)).status,200);
+ const reopened=createConversationRoutes({controllerFile:path.join(root,'controller.json'),bridge});assert.equal(reopened.snapshot('conversation-a').revisionContext.state,'armed');
+ assert.equal(reopened.claimRevision('conversation-a','turn-1').parent.taskId,task.taskId);assert.throws(()=>reopened.claimRevision('conversation-a','turn-2'),/待核对/);
+ assert.equal(reopened.releaseRevision('conversation-a','old-turn'),false);
+ assert.equal(reopened.snapshot('conversation-a').revisionContext.state,'claimed');
+ assert.equal(reopened.releaseRevision('conversation-a','turn-1'),true);
+ assert.equal(reopened.snapshot('conversation-a').revisionContext.state,'armed');
+ assert.equal(reopened.claimRevision('conversation-a','turn-2').parent.taskId,task.taskId);
+ const payload=submission({clientRequestId:'revision-submit',workflow:'joint-ai-v1',request:'标题改成 6',revisionParent:{taskId:task.taskId,candidateDigest:'d'.repeat(64)},revisionIntentId:'revision-1'});
+ let sent;bridge.handle=async(_m,_u,b)=>{sent=b;return {status:503,body:{code:'unknown'}};};
+ assert.equal((await reopened.handle('POST',SUBMIT,payload)).status,503);assert.equal(sent.revisionParent.taskId,task.taskId);assert.equal(sent.revisionIntentId,undefined);
+ const pending=reopened.snapshot('conversation-a').pendingRequests[0];assert.equal(pending.revisionIntentId,'revision-1');
+ assert.equal(reopened.releaseRevision('conversation-a','turn-2'),false);
+ assert.equal(reopened.snapshot('conversation-a').revisionContext.state,'submitting');
+ assert.throws(()=>reopened.claimRevision('conversation-a','turn-3'),/投递结果待核对/);
+ assert.equal((await reopened.handle('POST',SUBMIT,{...payload,clientRequestId:'duplicate-turn'})).status,409);
+ assert.equal((await reopened.handle('POST',GET+'/revision/cancel',{conversationId:'conversation-a',intentId:'revision-1'})).status,200);
+ assert.equal((await reopened.handle('POST',SUBMIT,payload)).status,503); // Existing exact outbox may still be reconciled.
+});
+
 function ok(result, status = 200) { assert.equal(result.status, status, JSON.stringify(result.body)); return result.body; }
 function error(result, status, code) { assert.equal(result.status, status); assert.equal(result.body.code, code); }
 

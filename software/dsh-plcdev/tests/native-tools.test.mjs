@@ -7,30 +7,32 @@ import { createProjectModelAdapter, projectModelRequest, MODEL_PROVIDER, MODEL_I
 const PROJECT='user-'+'a'.repeat(32),TASK='task-'+'b'.repeat(32),REV='c'.repeat(64);
 function fixture(){
   const state={binding:{conversationId:'chat-a',projectId:PROJECT,version:1,taskRefs:[],pendingRequests:[]},revision:REV,posts:[],reads:[],concluded:0};
-  const bridge={async handle(method,path){assert.equal(method,'GET');state.reads.push(path);return {status:200,body:{projectId:PROJECT,projectRevision:state.revision,capabilities:{jointAiCandidate:true},tasks:[{projectId:PROJECT,taskId:TASK,status:'awaiting_review'}]}};}};
+  const bridge={async handle(method,path){assert.equal(method,'GET');state.reads.push(path);return {status:200,body:{projectId:PROJECT,projectRevision:state.revision,capabilities:{jointAiCandidate:true,jointPlanCandidate:true},tasks:[{projectId:PROJECT,taskId:TASK,status:'awaiting_review'}]}};}};
   const conversations={snapshot:id=>({...structuredClone(state.binding),conversationId:id}),async handle(method,path,body){state.posts.push({method,path,body});state.binding.taskRefs.push({projectId:body.projectId,taskId:TASK});return {status:202,body:{task:{projectId:body.projectId,taskId:TASK,status:'queued',workflow:body.workflow}}};}};
-  const tools=createNativeTools({bridge,conversations}),exec={agent:{session:{id:'chat-a'}},callId:'call-1',signal:new AbortController().signal,concludeTurn(){state.concluded++;}};
+  const scope={route:{provider:'model-a',model:'a'},userRequest:'用户的真实生成请求'};
+  const projectContext={assertExecution:()=>scope,get:()=>scope};
+  const tools=createNativeTools({bridge,conversations,projectContext}),exec={agent:{session:{id:'chat-a'}},callId:'call-1',signal:new AbortController().signal,concludeTurn(){state.concluded++;}};
   const call=async(name,args={},execution=exec)=>JSON.parse(await tools.find(t=>t.name===name).execute(args,execution));
-  return {state,bridge,conversations,tools,exec,call};
+  return {state,bridge,conversations,projectContext,tools,exec,call};
 }
 test('native tool registration exposes only context proposal status and trusted execution session',async()=>{
   const f=fixture();assert.deepEqual(f.tools.map(t=>t.name),TOOL_NAMES);
   await assert.rejects(f.call(TOOL_NAMES[0],{},{}),/真实 DSH/);
   await assert.rejects(f.call(TOOL_NAMES[0],{conversationId:'other'}),/参数无效/);
   const context=await f.call(TOOL_NAMES[0]);assert.equal(context.projectId,PROJECT);assert.equal(context.sourceBasis,'saved_revision');assert.match(context.contextToken,/^[a-f0-9]{64}$/);
-  const result=await f.call(TOOL_NAMES[1],{request:'Count 改为 BatchCount，更新画面及场景标签',contextToken:context.contextToken});
+  const result=await f.call(TOOL_NAMES[1],{planJson:'{}',request:'Count 改为 BatchCount，更新画面及场景标签',contextToken:context.contextToken});
   assert.equal(result.task.taskId,TASK);assert.equal(f.state.concluded,1);assert.equal(f.state.posts.length,1);
   assert.equal(f.state.posts[0].path,'/api/plcdev/conversations/tasks');assert.equal(f.state.posts[0].body.conversationId,'chat-a');assert.equal(f.state.posts[0].body.workflow,'joint-ai-v1');
   assert.equal(f.state.posts[0].body.expectedRevision,REV);assert.equal(f.state.posts[0].body.executionScope,'proposal');
-  const again=await f.call(TOOL_NAMES[1],{request:'Count 改为 BatchCount，更新画面及场景标签',contextToken:context.contextToken});
+  const again=await f.call(TOOL_NAMES[1],{planJson:'{}',request:'Count 改为 BatchCount，更新画面及场景标签',contextToken:context.contextToken});
   assert.equal(f.state.posts[0].body.clientRequestId,f.state.posts[1].body.clientRequestId);assert.equal(again.task.projectId,PROJECT);
 });
 test('native stale project binding and saved version tokens cannot redirect a proposal',async()=>{
   const f=fixture(),context=await f.call(TOOL_NAMES[0]);
   f.state.binding.version++;
-  await assert.rejects(f.call(TOOL_NAMES[1],{request:'联合修改',contextToken:context.contextToken}),/已变化/);
+  await assert.rejects(f.call(TOOL_NAMES[1],{planJson:'{}',request:'联合修改',contextToken:context.contextToken}),/已变化/);
   f.state.binding.version--;f.state.revision='d'.repeat(64);
-  await assert.rejects(f.call(TOOL_NAMES[1],{request:'联合修改',contextToken:context.contextToken}),/已变化/);
+  await assert.rejects(f.call(TOOL_NAMES[1],{planJson:'{}',request:'联合修改',contextToken:context.contextToken}),/已变化/);
   assert.equal(f.state.posts.length,0);
   f.state.binding.projectId=null;await assert.rejects(f.call(TOOL_NAMES[0]),/关联/);
 });
@@ -38,7 +40,7 @@ test('native status cannot read another conversation task and pending uncertain 
   const f=fixture();await assert.rejects(f.call(TOOL_NAMES[2],{taskId:TASK}),/不属于/);
   f.state.binding.taskRefs.push({projectId:PROJECT,taskId:TASK});assert.equal((await f.call(TOOL_NAMES[2],{taskId:TASK})).task.taskId,TASK);
   const context=await f.call(TOOL_NAMES[0]);f.state.binding.pendingRequests.push({clientRequestId:'unknown'});
-  await assert.rejects(f.call(TOOL_NAMES[1],{request:'联合修改',contextToken:context.contextToken}),/待核对/);assert.equal(f.state.posts.length,0);
+  await assert.rejects(f.call(TOOL_NAMES[1],{planJson:'{}',request:'联合修改',contextToken:context.contextToken}),/待核对/);assert.equal(f.state.posts.length,0);
 });
 
 test('native cards preserve evidence and accept a name only from the exact project',async()=>{
@@ -68,6 +70,15 @@ const options=()=>({provider:MODEL_PROVIDER,model:MODEL_ID,sessionId:'chat-a',to
   {role:'tool',source:{callId:'ours'},content:[{type:'text',text:'{"projectId":"bound"}'}]},
   {role:'tool',source:{callId:'foreign'},content:[{type:'text',text:'FOREIGN TOOL DATA'}]},
 ]});
+
+test('revision proposal preserves exact user request and pinned parent independently of adapter',async()=>{
+ const f=fixture(),scope=f.projectContext.get();
+ scope.userRequest='标题改成 6';scope.revision={parent:{taskId:TASK,candidateDigest:'d'.repeat(64)},intentId:'r-1'};
+ const c=await f.call(TOOL_NAMES[0]);await f.call(TOOL_NAMES[1],{contextToken:c.contextToken,request:'模型重写',planJson:'{}'});
+ assert.equal(f.state.posts[0].body.request,'标题改成 6');assert.deepEqual(f.state.posts[0].body.revisionParent,scope.revision.parent);
+ assert.equal(f.state.posts[0].body.planSubmission.route.provider,'model-a');
+});
+
 test('provider projection strips host prompts environment older turns other tools and foreign tool output',()=>{
   const request=projectModelRequest(options()),json=JSON.stringify(request);
   assert.equal(request.messages[0].content,'CURRENT PROJECT REQUEST');assert.equal(request.messages.length,3);assert.equal(request.tools.length,3);
@@ -102,6 +113,5 @@ test('rebinding while native model request is in flight discards old reply befor
   f.state.binding.version++;
   resolve({ok:true,completion:{choices:[{message:{tool_calls:[{id:'late',type:'function',function:{name:TOOL_NAMES[0],arguments:'{}'}}]},finish_reason:'tool_calls'}]}});
   await assert.rejects(pending,/旧回复未执行/);
-  const tools=createNativeTools({...f,turnScopes});await assert.rejects(tools[0].execute({},f.exec),/工程绑定已变化/);
-  await assert.rejects(Array.fromAsync(adapter.stream(options())),/本轮对话期间/);assert.equal(f.state.posts.length,0);
+  assert.equal(f.state.posts.length,0);
 });

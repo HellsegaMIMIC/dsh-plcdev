@@ -67,15 +67,15 @@ test('native review buttons issue explicit pinned actions and disable undo after
   const button=label=>{const found=[...dom.window.document.querySelectorAll('button')].find(b=>b.textContent===label);assert.ok(found,label);return found;};
   try{
     reactRoot.render(React.createElement(module.exports.ConversationReview,{sessionId:'chat-review',onOverview:()=>{},useTabInfo:()=>({tab:{navigation:{params:target}}})}));await wait();
-    assert.equal(posts.length,0);assert.equal(button('保留为新工程').disabled,false);assert.equal(button('撤销候选').disabled,false);assert.equal(button('编译保留版本').disabled,true);
+    assert.equal(posts.length,0);assert.equal(button('创建修改副本').disabled,false);assert.equal(button('放弃这次修改').disabled,false);assert.equal(button('编译保留版本').disabled,true);
     assert.ok(dom.window.document.body.textContent.includes('工程名称未能确认'),'Missing name metadata does not hide a valid task');
     savedRevision='f'.repeat(64);button('刷新').click();await wait();
-    assert.equal(button('保留为新工程').disabled,true);assert.equal(button('撤销候选').disabled,false);
+    assert.equal(button('创建修改副本').disabled,true);assert.equal(button('放弃这次修改').disabled,false);
     assert.ok(dom.window.document.body.textContent.includes('旧候选不能保留'));assert.equal(posts.length,0);
     savedRevision=source;button('刷新').click();await wait();
-    button('保留为新工程').click();await wait();
+    button('创建修改副本').click();await wait();
     assert.equal(posts[0].body.expectedRevision,source);assert.equal(posts[0].body.conversationId,'chat-review');assert.equal(posts[0].body.candidateDigest,digest);
-    assert.equal(button('撤销候选').disabled,true);assert.equal(button('保留为新工程').disabled,true);assert.equal(button('编译保留版本').disabled,false);
+    assert.equal([...dom.window.document.querySelectorAll('button')].some(b=>b.textContent==='放弃这次修改'),false);assert.equal(button('创建修改副本').disabled,true);assert.equal(button('编译保留版本').disabled,false);
     button('编译保留版本').click();await wait();assert.equal(posts[1].body.expectedRevision,kept);assert.equal(posts[1].body.taskId,taskId);
     assert.ok(dom.window.document.body.textContent.includes('编译通过'));assert.equal(posts.some(p=>p.path.includes('/action')),false);assert.deepEqual(errors,[]);
     current={...current,status:'conflict',reason:'保留工程版本已变化'};button('刷新').click();await wait();
@@ -85,7 +85,7 @@ test('native review buttons issue explicit pinned actions and disable undo after
     assert.equal(button('编译保留版本').disabled,true);assert.equal(current.compilation.status,'compiled');
     const reviews=[];
     reactRoot.render(React.createElement(module.exports.NativeToolCard,{phase:'result',toolName:'plcdev_propose_joint',block:{content:[{type:'text',text:JSON.stringify({task:current})}],isError:false},onReviewTask:value=>reviews.push(value)}));await wait();
-    button('审阅候选').click();await wait();assert.deepEqual(reviews,[target],'Tool result navigates through its injected session action without owner sessionId props');
+    button('查看更改').click();await wait();assert.deepEqual(reviews,[target],'Tool result navigates through its injected session action without owner sessionId props');
     current={...task(),workflow:'team-analysis-v1',status:'analysis_ready',candidate:undefined,retention:undefined,
       teamAnalysis:{rootSessionId:'native-lead',members:[{role:'plc',sessionId:'native-plc',nativeTaskId:'t1',instruction:'检查参数',reportDigest:digest,report:{summary:'目标范围分析',findings:['PLC 明确校验范围'],unverified:['未运行实测']}}]}};
     reactRoot.render(React.createElement(module.exports.ConversationReview,{sessionId:'chat-review',useTabInfo:()=>({tab:{navigation:{params:target}}}),onOverview:()=>{}}));await wait();
@@ -100,10 +100,10 @@ test('native review buttons issue explicit pinned actions and disable undo after
     await wait();button('刷新').click();await wait();
     assert.ok(dom.window.document.body.textContent.includes('PLC／HMI／OIP 独立产物'));
     assert.ok(dom.window.document.body.textContent.includes('不是静态分析或运行证据'));
-    assert.equal(button('保留为新工程').disabled,false);button('保留为新工程').click();await wait();
-    const beforeNavigation=posts.length;button('打开保留工程 · 查看运行入口').click();await wait();
+    assert.equal(button('创建修改副本').disabled,false);button('创建修改副本').click();await wait();
+    const beforeNavigation=posts.length;button('打开修改副本').click();await wait();
     assert.deepEqual(selected,['user-retained']);assert.equal(posts.length,beforeNavigation,'Runtime navigation must not send commands');
-    assert.equal(button('撤销候选').disabled,true);assert.equal(button('编译保留版本').disabled,false);
+    assert.equal([...dom.window.document.querySelectorAll('button')].some(b=>b.textContent==='放弃这次修改'),false);assert.equal(button('编译保留版本').disabled,false);
     assert.equal(dom.window.document.body.textContent.includes('此任务为既有规则候选'),false);
   }finally{reactRoot.unmount();dom.window.close();for(const [key,value]of Object.entries(prior))Object.defineProperty(globalThis,key,{configurable:true,writable:true,value});}
 });

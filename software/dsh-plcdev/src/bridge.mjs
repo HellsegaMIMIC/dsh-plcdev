@@ -52,7 +52,11 @@ function parseRequest(method, rawPath, body) {
   } else {
     if (url.search) fail(400, 'invalid_request', '操作请求不能附带查询参数。');
     if (route === '/tasks') {
-      fields(body, ['projectId', 'request', 'expectedRevision', 'executionScope', 'clientRequestId'], ['sourceBasis', 'workflow']);
+      fields(body, ['projectId', 'request', 'expectedRevision', 'executionScope', 'clientRequestId'], ['sourceBasis', 'workflow', 'revisionParent', 'planSubmission']);
+      if (has(body,'revisionParent')) {
+        fields(body.revisionParent,['taskId','candidateDigest']);
+        if(body.workflow!=='joint-ai-v1'||!/^task-[0-9a-f]{32}$/.test(body.revisionParent.taskId||'')||!DIGEST.test(body.revisionParent.candidateDigest||''))fail(400,'invalid_request','修订父候选无效。');
+      }
       if (typeof body.request !== 'string' || !body.request.trim() || body.request.trim().length > 4000
         || typeof body.expectedRevision !== 'string' || !DIGEST.test(body.expectedRevision) || body.executionScope !== 'proposal'
         || typeof body.clientRequestId !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(body.clientRequestId)

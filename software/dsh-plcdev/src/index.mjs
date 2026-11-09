@@ -1,3 +1,5 @@
+import { createProjectContext } from './project-context.mjs';
+import { authenticatedDesktopRequest } from './desktop-auth.mjs';
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -9,7 +11,7 @@ import { createProjectModelAdapter, MODEL_PROVIDER } from './model-adapter.mjs';
 import { createTeamIntegration, TEAM_PROVIDER } from './teams.mjs';
 
 export const name = 'dsh-plcdev';
-export const inject = ['webServer', 'tools', 'llm'];
+export const inject = ['webServer', 'tools', 'llm', 'agents', 'sessionProjections', 'systemPrompt'];
 const pluginVersion = createRequire(import.meta.url)('../package.json').version;
 
 /** This plugin owns only HTTP routes; the independent controller owns Runtime. */
@@ -17,15 +19,17 @@ export function apply(ctx, config) {
   const fixed = Object.freeze({ controllerFile: config.controllerFile, projectRoot: config.projectRoot, timeoutMs: config.timeoutMs });
   const bridge = createBridge(fixed);
   const conversations = createConversationRoutes({ controllerFile: fixed.controllerFile, bridge });
-  const turnScopes = new Map();
-  for (const tool of createNativeTools({ bridge, conversations, turnScopes })) ctx.effect(() => ctx.tools.register(tool));
-  ctx.effect(() => ctx.llm.registerAdapter([MODEL_PROVIDER], createProjectModelAdapter({ bridge, conversations, turnScopes })));
+  const projectContext = createProjectContext({ ctx, conversations });
+  for (const tool of createNativeTools({ bridge, conversations, projectContext })) ctx.effect(() => ctx.tools.register(tool));
+  ctx.effect(() => ctx.llm.registerAdapter([MODEL_PROVIDER], createProjectModelAdapter({ bridge, conversations, projectContext })));
   ctx.inject(['agentTeams', 'agents', 'sessionProjections', 'sessions', 'sessionPersistence'], teamCtx => {
     const team = createTeamIntegration({ ctx: teamCtx, bridge, conversations });
     for (const tool of team.tools) teamCtx.effect(() => teamCtx.tools.register(tool));
     teamCtx.effect(() => teamCtx.tools.guard(team.guard));
     teamCtx.effect(() => teamCtx.llm.registerAdapter([TEAM_PROVIDER], team.adapter));
   });
+  let nativeConnection;
+  ctx.inject(['connection'], nativeCtx => { nativeConnection=nativeCtx.connection; nativeCtx.effect(()=>()=>{nativeConnection=undefined;}); });
   const hostInstance = randomUUID();
   ctx.effect(() => ctx.webServer.register({
     kind: 'prefix', path: '/api/plcdev',
@@ -53,7 +57,7 @@ export function apply(ctx, config) {
         }
         let body;
         if (req.method === 'POST') {
-          if (req.headers.origin !== origin || req.headers['content-type'] !== 'application/json') {
+          if ((req.headers.origin !== origin && !authenticatedDesktopRequest(req,nativeConnection)) || req.headers['content-type'] !== 'application/json') {
             reply(403, { error: '操作需要同源 JSON 请求。' }); return;
           }
           const chunks = []; let size = 0;
@@ -68,6 +72,8 @@ export function apply(ctx, config) {
         const result = path.startsWith('/api/plcdev/conversations')
           ? await conversations.handle(req.method, req.url, body)
           : await bridge.handle(req.method, req.url, body);
+        if (path === '/api/plcdev/conversations' && result.status === 200)
+          result.body = {...result.body, modelCapability:projectContext.notice(result.body.conversationId)};
         if (path === '/api/plcdev/health') result.body = { ...result.body, hostInstance, hostPid: process.pid, pluginVersion, conversationApiVersion: 1, nativeAgent: { provider: MODEL_PROVIDER, model: 'project-agent', tools: 3 } };
         reply(result.status, result.body);
       } catch {

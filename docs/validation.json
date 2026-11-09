@@ -1,13 +1,13 @@
 {
-  "date": "2026-11-07",
+  "date": "2026-11-09",
   "passed": true,
-  "scope": "Staged source tree; cached npm install, build, offline protocol/UI tests and source audit.",
+  "scope": "Staged source tree; cached npm install, build, offline protocol/UI tests and source audit. Skipped integration tests are not counted as passed.",
   "checks": [
     {
       "check": "npm-offline-install",
       "exitCode": 0,
       "testCount": null,
-      "logSha256": "e9067d4d73d439ea568e2c5e6a96766c5cf4768365ec81e63a1969b579f04ca8"
+      "logSha256": "cdba7ae9af4f68349f3392b3b64a4f5a9f56b84ddf828517958954fbf879f0ec"
     },
     {
       "check": "plugin-build",
@@ -18,50 +18,85 @@
     {
       "check": "plugin-tests",
       "exitCode": 0,
-      "testCount": 188,
-      "logSha256": "5567dc6cbf0130477f050b8aa09ac9712c7a0a30170368402b458724ae7b9847"
+      "testCount": 209,
+      "passedCount": 208,
+      "failedCount": 0,
+      "skippedCount": 1,
+      "cancelledCount": 0,
+      "todoCount": 0,
+      "logSha256": "c111df18acdc80ac6c42ab568467037ed602732f5474887dc6d475987a06cee9"
     },
     {
       "check": "project_interface",
       "exitCode": 0,
       "testCount": 25,
-      "logSha256": "7474897e351875832d91f86a645ce4ae2d0396dfb39a89127162a5c607dba91a"
+      "passedCount": 25,
+      "failedCount": 0,
+      "skippedCount": 0,
+      "expectedFailureCount": 0,
+      "logSha256": "ffc7587def27e82ea2bc9c7df219a9efa5364de76bb0c65bb1d049dab7bd2b20"
     },
     {
       "check": "plcdev_environment",
       "exitCode": 0,
       "testCount": 8,
-      "logSha256": "38ee4f42c7bf098dbe251cb6b37f70c6bac26594532633e45f1cbc3567c68d87"
+      "passedCount": 8,
+      "failedCount": 0,
+      "skippedCount": 0,
+      "expectedFailureCount": 0,
+      "logSha256": "ccc8ac576a0ae9605a09f7a824e1d65afc9190ef8661bc6cdffb27a2b131abd9"
     },
     {
       "check": "workbench_empty_catalog",
       "exitCode": 0,
       "testCount": 3,
-      "logSha256": "cedb77a346633d6137037f24ae44f0742025ff72ce57da4a9a4ce90e773683a8"
+      "passedCount": 3,
+      "failedCount": 0,
+      "skippedCount": 0,
+      "expectedFailureCount": 0,
+      "logSha256": "996298a71f090d51c0716db1c7ead4a680e6b89d7a2f22e3288d52554fe51f79"
     },
     {
       "check": "verify_source_release",
       "exitCode": 0,
       "testCount": 4,
-      "logSha256": "9260a239492d985954f177010a873944796f5ff971d65ea04479ea3d1f65399c"
+      "passedCount": 4,
+      "failedCount": 0,
+      "skippedCount": 0,
+      "expectedFailureCount": 0,
+      "logSha256": "32722ce80135dd9e6cb0c57a069a531058411a5b3f8f302ec6c92265c0919675"
     },
     {
       "check": "workbench_fuxa_oip",
       "exitCode": 0,
       "testCount": 28,
-      "logSha256": "24a69d00ecc2b1cc52caca93ac22cc1eb09f23b77aecfd7a7dd9cd89e98ae695"
+      "passedCount": 28,
+      "failedCount": 0,
+      "skippedCount": 0,
+      "expectedFailureCount": 0,
+      "logSha256": "a306ec01805dac097c186ffbad5ecedcb26cb60972bb77042d27df18ec460242"
+    },
+    {
+      "check": "agent_revisions",
+      "exitCode": 0,
+      "testCount": 7,
+      "passedCount": 7,
+      "failedCount": 0,
+      "skippedCount": 0,
+      "expectedFailureCount": 0,
+      "logSha256": "b474392688d1cb54d602794f9eb199708a54bff9b570d073f57b969993870bdc"
     },
     {
       "check": "source-audit",
       "exitCode": 0,
       "testCount": null,
-      "logSha256": "e30a61d9e481a86948fbb1662d45fda1011c96724cd4913e174d6d968d45c6b7"
+      "logSha256": "062f55712fffff8763c8c300b0711a21f9e0e5b00c44566151ccbd4633e1e467"
     }
   ],
   "examplesIncluded": false,
   "modelCalls": 0,
   "runtimeStarted": false,
   "freshMachineFullInstallVerified": false,
-  "testedPluginEntrySha256": "f1a818e1ffac1e739ff7acead311d5f3b00506bd7bdb37377f135ee9d211c0a8",
+  "testedPluginEntrySha256": "9419cf32dabaf541a4e6f2824d2eed0e314cd3c1c7102fbaa57408c3f338f188",
   "privateLogsIncluded": false
 }

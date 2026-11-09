@@ -23,7 +23,7 @@ function compactTask(task) {
 }
 
 /** Native DSH tools use trusted session identity, fixed saved revision and proposal-only authority. */
-export function createNativeTools({ bridge, conversations, turnScopes }) {
+export function createNativeTools({ bridge, conversations, projectContext }) {
   async function projectName(projectId) {
     try {
       const result = await bridge.handle('GET', '/api/plcdev/status?project=' + encodeURIComponent(projectId));
@@ -37,14 +37,10 @@ export function createNativeTools({ bridge, conversations, turnScopes }) {
     if (typeof id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}$/.test(id)) throw new Error('需要真实 DSH 对话身份，不能由工具参数指定会话。');
     return id;
   }
-  async function context(id) {
+  async function context(id, exec) {
+    const scope = projectContext?.assertExecution(exec);
     const binding = conversations.snapshot(id);
-    if (!binding.projectId) throw new Error('请先在输入框上方关联 PLCdev 工程。');
-    if (turnScopes) {
-      const scope = turnScopes.get(id);
-      if (!scope || scope.projectId !== binding.projectId || scope.version !== binding.version)
-        throw new Error('本轮对话的工程绑定已变化或尚未核验，请重新发送明确需求。');
-    }
+    if (!binding.projectId) throw new Error('请先在对话右上角选择并关联 PLCdev 工程。');
     const response = await bridge.handle('GET', '/api/plcdev/tasks?project=' + encodeURIComponent(binding.projectId));
     if (response.status !== 200 || response.body.projectId !== binding.projectId || !/^[0-9a-f]{64}$/.test(response.body.projectRevision ?? ''))
       throw new Error('尚未核对工程已保存版本。');
@@ -53,7 +49,10 @@ export function createNativeTools({ bridge, conversations, turnScopes }) {
     const current = conversations.snapshot(id);
     if (current.projectId !== binding.projectId || current.version !== binding.version)
       throw new Error('读取工程期间绑定已变化，请重新核对。');
-    return { binding, listing: response.body, projectName: name, contextToken: hash(JSON.stringify([id, binding.projectId, binding.version, revision])) };
+    if (projectContext) projectContext.assertExecution(exec);
+    if (scope && scope.sourceRevision && scope.sourceRevision !== revision) throw new Error('源版本已变化，请重新发送需求。');
+    if (scope) scope.sourceRevision ??= revision;
+    return { binding, listing: response.body, projectName: name, contextToken: hash(JSON.stringify([id, binding.projectId, binding.version, revision, scope?.turnKey])) };
   }
   function define(name, title, description, parameters, execute) {
     return { name, description, parameters,
@@ -61,31 +60,39 @@ export function createNativeTools({ bridge, conversations, turnScopes }) {
         presentationMeta: (_args, value) => { try { const data = JSON.parse(value); return data.task ? { projectId: data.task.projectId, taskId: data.task.taskId } : {}; } catch { return {}; } } },
       presentCall: () => ({ card: 'generic', title, kind: name === 'plcdev_propose_joint' ? 'edit' : 'read' }),
       isConcurrencySafe: () => name !== 'plcdev_propose_joint',
-      async execute(args, exec) { return JSON.stringify(await execute(args, exec)); },
+      async execute(args, exec) { projectContext?.assertExecution(exec); return JSON.stringify(await execute(args, exec)); },
     };
   }
   return [
     define(TOOL_NAMES[0], '核对 PLCdev 工程', 'Read the project explicitly bound to this DSH conversation and its saved revision. Call before proposing a joint PLC/FUXA/OIP candidate. Does not inspect files or control Runtime.', object({}), async (args, exec) => {
-      exact(args, []); const id = session(exec), { binding, listing, projectName, contextToken } = await context(id);
+      exact(args, []); const id = session(exec), { binding, listing, projectName, contextToken } = await context(id, exec);
       const own = new Set(binding.taskRefs.filter(r => r.projectId === binding.projectId).map(r => r.taskId));
       return { ok: true, projectId: binding.projectId, projectName, sourceBasis: 'saved_revision', projectRevision: listing.projectRevision, contextToken,
         jointAiCandidate: listing.capabilities?.jointAiCandidate === true,
+        planningInput: listing.planningInput,
+        revision: projectContext?.get(id)?.revision ? {parent:projectContext.get(id).revision.parent,previousRequest:projectContext.get(id).revision.previousRequest,previousSummary:projectContext.get(id).revision.previousSummary} : null,
         tasks: listing.tasks.filter(t => own.has(t.taskId)).slice(-5).map(compactTask),
         boundary: 'Only saved project candidate generation. Unsaved editor changes excluded. Keep/Undo/Compile are explicit review actions; no Runtime start/stop.' };
     }),
-    define(TOOL_NAMES[1], '生成 PLC／HMI／场景联合候选', 'Generate a real AI joint candidate for OpenPLC, FUXA and OIP in the bound project. Use the exact contextToken from plcdev_project_context. Request must preserve the user intent. Creates a separate candidate only, never keeps, compiles or runs it.', object({ request: string, contextToken: string }), async (args, exec) => {
-      exact(args, ['request', 'contextToken']); const id = session(exec);
+    define(TOOL_NAMES[1], '生成 PLC／HMI／场景联合候选', 'Submit your structured plan as planJson using the contract from plcdev_project_context. The backend validates and renders native OpenPLC/FUXA/OIP artifacts without another model call. Use the exact contextToken from plcdev_project_context. Request must preserve the user intent. Creates a separate candidate only, never keeps, compiles or runs it.', object({ request: string, contextToken: string, planJson: string }), async (args, exec) => {
+      exact(args, ['request', 'contextToken', 'planJson']); const id = session(exec);
       if (typeof args.request !== 'string' || !args.request.trim() || args.request.length > 4000) throw new Error('候选需求应为 1–4000 字符。');
-      const { binding, listing, projectName, contextToken } = await context(id);
+      const { binding, listing, projectName, contextToken } = await context(id, exec);
       if (args.contextToken !== contextToken) throw new Error('工程绑定或源版本已变化。请重新读取上下文，不得把旧需求自动投到新工程。');
-      if (listing.capabilities?.jointAiCandidate !== true) throw new Error('当前工程尚未开放真实 AI 联合候选。');
+      if (listing.capabilities?.jointPlanCandidate !== true) throw new Error('当前工程尚未开放真实 AI 联合候选。');
       if (binding.pendingRequests.length) throw new Error('本对话仍有待核对请求，请在工程与任务区使用原请求编号恢复。');
       if (typeof exec.callId !== 'string' || !exec.callId) throw new Error('DSH 工具调用身份缺失。');
       exec.signal?.throwIfAborted();
+      const scope = projectContext?.assertExecution(exec);
+      if (!scope?.route || !scope.userRequest) throw new Error('缺少本轮用户原文或实际模型路由。');
+      if (typeof args.planJson !== 'string' || Buffer.byteLength(args.planJson)>65536) throw new Error('结构化计划无效或过长。');
+      let plan; try { plan=JSON.parse(args.planJson); } catch { throw new Error('计划须为有效 JSON。'); }
+      if (!plan || Array.isArray(plan) || typeof plan!=='object') throw new Error('计划须为 JSON 对象。');
       const result = await conversations.handle('POST', '/api/plcdev/conversations/tasks', {
         conversationId: id, projectId: binding.projectId, expectedVersion: binding.version,
-        request: args.request.trim(), expectedRevision: listing.projectRevision, executionScope: 'proposal',
-        sourceBasis: 'saved_revision', workflow: 'joint-ai-v1', clientRequestId: 'native-' + hash(exec.callId),
+        request: scope.userRequest, planSubmission:{schemaVersion:1,plan,route:scope.route}, expectedRevision: listing.projectRevision, executionScope: 'proposal',
+        sourceBasis: 'saved_revision', workflow: 'joint-ai-v1', clientRequestId: 'native-' + hash(scope.turnKey || exec.callId),
+        ...(projectContext?.get(id)?.revision?{request:projectContext.get(id).userRequest,revisionParent:projectContext.get(id).revision.parent,revisionIntentId:projectContext.get(id).revision.intentId}:{}),
       });
       if (result.status < 200 || result.status >= 300) throw new Error(result.body.error || '候选任务未确认，请核对本对话任务。');
       // Durable asynchronous generation continues in TaskService, not a model polling loop.

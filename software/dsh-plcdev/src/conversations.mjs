@@ -50,6 +50,9 @@ export function createConversationRoutes({ controllerFile, bridge }) {
         conversation_id TEXT NOT NULL, task_id TEXT NOT NULL, project_id TEXT NOT NULL,
         created_at TEXT NOT NULL, PRIMARY KEY(conversation_id, task_id)
       );`);
+    db.exec(`CREATE TABLE IF NOT EXISTS revision_intents (
+      conversation_id TEXT PRIMARY KEY, payload TEXT NOT NULL, turn_key TEXT, state TEXT NOT NULL
+    );`);
     return db;
   }
   function withDb(fn) { const db = open(); try { return fn(db); } finally { db.close(); } }
@@ -64,7 +67,8 @@ export function createConversationRoutes({ controllerFile, bridge }) {
   }
   function snapshot(id) { return withDb(db => {
     const rows = db.prepare('SELECT * FROM submissions WHERE conversation_id=? ORDER BY created_at, request_id').all(id);
-    return { ok: true, ...readBinding(db, id),
+    const revision=db.prepare('SELECT * FROM revision_intents WHERE conversation_id=?').get(id);
+    return { ok: true, ...readBinding(db, id), ...(revision?{revisionContext:{...JSON.parse(revision.payload),state:revision.state}}:{}),
       taskRefs: [...rows.filter(r => r.state === 'accepted').map(r => ({ projectId: r.project_id, taskId: r.task_id, clientRequestId: r.request_id, createdAt: r.created_at })),
         ...db.prepare('SELECT * FROM team_references WHERE conversation_id=? ORDER BY created_at').all(id).map(r => ({ projectId: r.project_id, taskId: r.task_id, clientRequestId: 'team-' + r.task_id, createdAt: r.created_at }))],
       pendingRequests: rows.filter(r => ['pending', 'unknown'].includes(r.state)).map(r => ({
@@ -94,7 +98,7 @@ export function createConversationRoutes({ controllerFile, bridge }) {
     return { status: 200, body: snapshot(body.conversationId) };
   }
   async function submit(body) {
-    fields(body, ['conversationId', 'projectId', 'expectedVersion', 'request', 'expectedRevision', 'executionScope', 'clientRequestId', 'sourceBasis'], ['workflow']);
+    fields(body, ['conversationId', 'projectId', 'expectedVersion', 'request', 'expectedRevision', 'executionScope', 'clientRequestId', 'sourceBasis'], ['workflow','revisionParent','planSubmission','revisionIntentId']);
     bindingInput(body);
     if (body.projectId === null || typeof body.request !== 'string' || !body.request.trim() || body.request.length > 4000 ||
         !HASH.test(body.expectedRevision ?? '') || body.executionScope !== 'proposal' || body.sourceBasis !== 'saved_revision' ||
@@ -102,8 +106,12 @@ export function createConversationRoutes({ controllerFile, bridge }) {
       reject(400, 'invalid_task', '任务需要确定的工程、已保存版本与候选范围。');
     const payload = { projectId: body.projectId, request: body.request.trim(), expectedRevision: body.expectedRevision,
       executionScope: body.executionScope, sourceBasis: body.sourceBasis, clientRequestId: body.clientRequestId,
-      ...(body.workflow ? { workflow: body.workflow } : {}) };
-    const digest = hash(JSON.stringify({ ...payload, expectedVersion: body.expectedVersion }));
+      ...(body.planSubmission ? {planSubmission:body.planSubmission} : {}),...(body.workflow ? { workflow: body.workflow } : {}),...(body.revisionParent?{revisionParent:body.revisionParent}:{}) };
+    if(body.revisionParent){
+      fields(body.revisionParent,['taskId','candidateDigest']);
+      if(!/^task-[0-9a-f]{32}$/.test(body.revisionParent.taskId||'')||!HASH.test(body.revisionParent.candidateDigest||'')||typeof body.revisionIntentId!=='string')reject(400,'invalid_revision','修订身份无效。');
+    }else if(body.revisionIntentId)reject(400,'invalid_revision','修订身份不完整。');
+    const digest = hash(JSON.stringify({ ...payload, expectedVersion: body.expectedVersion,...(body.revisionIntentId?{revisionIntentId:body.revisionIntentId}:{}) }));
     const row = transaction(db => {
       const old = db.prepare('SELECT * FROM submissions WHERE conversation_id=? AND request_id=?').get(body.conversationId, body.clientRequestId);
       if (old) {
@@ -114,10 +122,15 @@ export function createConversationRoutes({ controllerFile, bridge }) {
       const binding = readBinding(db, body.conversationId);
       if (binding.projectId !== body.projectId || binding.version !== body.expectedVersion)
         reject(409, 'binding_changed', '会话工程或绑定版本已变化，旧输入未提交。');
+      if(body.revisionParent){
+        const row=db.prepare('SELECT * FROM revision_intents WHERE conversation_id=?').get(body.conversationId),intent=row&&JSON.parse(row.payload);
+        if(!intent||row.state!=='claimed'||intent.intentId!==body.revisionIntentId||intent.projectId!==body.projectId||intent.expectedVersion!==body.expectedVersion||intent.expectedRevision!==body.expectedRevision||JSON.stringify(intent.parent)!==JSON.stringify(body.revisionParent))reject(409,'revision_changed','修订上下文已变化，请重新选择。');
+      }
       const upstream = 'dsh2-' + hash(body.conversationId + '\0' + body.clientRequestId);
       const created = new Date().toISOString();
       db.prepare('INSERT INTO submissions VALUES(?,?,?,?,?,?,?,?,?,?)').run(body.conversationId, body.clientRequestId, digest,
-        body.projectId, body.expectedVersion, upstream, JSON.stringify(payload), 'pending', null, created);
+        body.projectId, body.expectedVersion, upstream, JSON.stringify({...payload,...(body.revisionIntentId?{revisionIntentId:body.revisionIntentId}:{})}), 'pending', null, created);
+      if(body.revisionParent)db.prepare("UPDATE revision_intents SET state='submitting' WHERE conversation_id=?").run(body.conversationId);
       return { upstream_id: upstream, state: 'pending' };
     });
     if (row.state === 'accepted') {
@@ -137,8 +150,10 @@ export function createConversationRoutes({ controllerFile, bridge }) {
       if (result.body.task?.projectId !== body.projectId || !/^task-[a-f0-9]{32}$/.test(result.body.task?.taskId ?? ''))
         result = { status: 503, body: { code: 'task_project_mismatch', error: '任务归属无法确认，未挂到当前会话。' } };
       else {
-        transaction(db => db.prepare(`UPDATE submissions SET state='accepted', task_id=?, payload=NULL
-          WHERE conversation_id=? AND request_id=?`).run(result.body.task.taskId, body.conversationId, body.clientRequestId));
+        transaction(db => {
+          db.prepare(`UPDATE submissions SET state='accepted', task_id=?, payload=NULL WHERE conversation_id=? AND request_id=?`).run(result.body.task.taskId, body.conversationId, body.clientRequestId);
+          if(body.revisionIntentId){const r=db.prepare('SELECT payload FROM revision_intents WHERE conversation_id=?').get(body.conversationId);if(r&&JSON.parse(r.payload).intentId===body.revisionIntentId)db.prepare("UPDATE revision_intents SET state='submitted' WHERE conversation_id=?").run(body.conversationId);}
+        });
         return { status: result.status, body: { ...result.body, conversationId: body.conversationId } };
       }
     }
@@ -148,6 +163,21 @@ export function createConversationRoutes({ controllerFile, bridge }) {
   }
   return {
     snapshot,
+    claimRevision(id,turnKey){return transaction(db=>{
+      const row=db.prepare('SELECT * FROM revision_intents WHERE conversation_id=?').get(id);if(!row)return null;
+      const intent=JSON.parse(row.payload),binding=readBinding(db,id);
+      if(row.state==='submitted')return null;
+      if(row.state==='submitting')reject(409,'revision_pending','修订任务投递结果待核对，请使用原请求编号恢复。');
+      if(intent.projectId!==binding.projectId||intent.expectedVersion!==binding.version)reject(409,'revision_changed','修订工程已变化，请取消修订后重新选择。');
+      if(row.turn_key&&row.turn_key!==turnKey)reject(409,'revision_claimed','上次修订结果尚待核对；请先取消修订或检查历史更改。');
+      db.prepare("UPDATE revision_intents SET turn_key=?,state='claimed' WHERE conversation_id=?").run(turnKey,id);return intent;
+    });},
+    // Trusted lifecycle cleanup only. Submission changes claimed -> submitting in
+    // the same transaction as the outbox insert, so an uncertain write is never rearmed.
+    releaseRevision(id,turnKey){return transaction(db=>{
+      return db.prepare("UPDATE revision_intents SET turn_key=NULL,state='armed' WHERE conversation_id=? AND turn_key=? AND state='claimed'")
+        .run(id,turnKey).changes===1;
+    });},
     // Callable only from trusted native Teams integration, never from HTTP/model input.
     referenceTeam(id, task) {
       conversation(id);
@@ -170,6 +200,26 @@ export function createConversationRoutes({ controllerFile, bridge }) {
         const body = JSON.parse(JSON.stringify(input ?? null));
         if (url.pathname === '/api/plcdev/conversations/bind') return await bind(body);
         if (url.pathname === '/api/plcdev/conversations/tasks') return await submit(body);
+        if(url.pathname==='/api/plcdev/conversations/revision'){
+          fields(body,['conversationId','projectId','taskId','candidateDigest','expectedRevision','expectedVersion','intentId']);bindingInput(body);
+          if(typeof body.intentId!=='string'||!/^[A-Za-z0-9_-]{1,100}$/.test(body.intentId))reject(400,'invalid_revision','修订编号无效。');
+          const current=snapshot(body.conversationId);
+          if(!current.taskRefs.some(t=>t.projectId===body.projectId&&t.taskId===body.taskId))reject(403,'task_not_in_conversation','此候选不属于当前对话。');
+          const listing=await bridge.handle('GET','/api/plcdev/tasks?project='+encodeURIComponent(body.projectId));
+          const task=listing.status===200&&listing.body.tasks?.find(t=>t.taskId===body.taskId&&t.projectId===body.projectId);
+          if(!task||task.candidate?.revisionSupported!==true||task.workflow!=='joint-ai-v1'||task.status!=='awaiting_review'||task.supersededBy||task.candidate?.candidateDigest!==body.candidateDigest||task.projectRevision!==body.expectedRevision||listing.body.projectRevision!==body.expectedRevision)reject(409,'revision_unavailable','候选已保留、被替代或版本变化，不能继续修改。');
+          const previousSummary=Object.fromEntries(['before','after'].filter(k=>typeof task.candidate.summary?.[k]==='string').map(k=>[k,task.candidate.summary[k].slice(0,1000)]));
+          const intent={intentId:body.intentId,projectId:body.projectId,expectedVersion:body.expectedVersion,expectedRevision:body.expectedRevision,parent:{taskId:body.taskId,candidateDigest:body.candidateDigest},previousRequest:task.request.slice(0,4000),previousSummary};
+          transaction(db=>{const b=readBinding(db,body.conversationId);if(b.projectId!==body.projectId||b.version!==body.expectedVersion)reject(409,'binding_changed','请先明确切回候选所属工程。');
+            const old=db.prepare('SELECT * FROM revision_intents WHERE conversation_id=?').get(body.conversationId);
+            if(old){const p=JSON.parse(old.payload);if(p.intentId===body.intentId){if(JSON.stringify(p)!==JSON.stringify(intent))reject(409,'revision_changed','同一修订编号的内容已变化。');return;}if(old.state!=='submitted')reject(409,'revision_busy','请先取消已有修订上下文。');}
+            db.prepare("INSERT INTO revision_intents VALUES(?,?,NULL,'armed') ON CONFLICT(conversation_id) DO UPDATE SET payload=excluded.payload,turn_key=NULL,state='armed'").run(body.conversationId,JSON.stringify(intent));});
+          return {status:200,body:snapshot(body.conversationId)};
+        }
+        if(url.pathname==='/api/plcdev/conversations/revision/cancel'){
+          fields(body,['conversationId','intentId']);conversation(body.conversationId);
+          transaction(db=>{const r=db.prepare('SELECT payload FROM revision_intents WHERE conversation_id=?').get(body.conversationId);if(r&&JSON.parse(r.payload).intentId!==body.intentId)reject(409,'revision_changed','修订上下文已变化。');db.prepare('DELETE FROM revision_intents WHERE conversation_id=?').run(body.conversationId);});return {status:200,body:snapshot(body.conversationId)};
+        }
         if (url.pathname === '/api/plcdev/conversations/review') {
           fields(body, ['conversationId', 'projectId', 'taskId', 'candidateDigest', 'expectedRevision', 'action', 'clientRequestId']);
           const state = snapshot(conversation(body.conversationId));

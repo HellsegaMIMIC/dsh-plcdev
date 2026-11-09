@@ -1,5 +1,4 @@
 import { TOOL_NAMES } from './native-tools.mjs';
-import { createHash } from 'node:crypto';
 
 export const MODEL_PROVIDER = 'plcdev-deepseek';
 export const MODEL_ID = 'project-agent';
@@ -33,7 +32,7 @@ export function projectModelRequest(options) {
 }
 
 /** Server-only adapter: no key is copied into DSH configuration, browser state or responses. */
-export function createProjectModelAdapter({ bridge, conversations, turnScopes = new Map() }) {
+export function createProjectModelAdapter({ bridge, conversations, projectContext }) {
   const checkRoute = (provider, model) => { if (provider !== MODEL_PROVIDER || model !== MODEL_ID) throw new Error('未知的 PLCdev 模型。'); };
   const adapter = {
     providerInfo: provider => ({ id: provider, name: 'PLCdev · DeepSeek' }),
@@ -47,20 +46,14 @@ export function createProjectModelAdapter({ bridge, conversations, turnScopes = 
       options.signal?.throwIfAborted();
       const request = projectModelRequest(options);
       const binding = conversations.snapshot(request.conversationId);
-      if (!binding.projectId) throw new Error('请先在输入框上方关联 PLCdev 工程，再使用工程助手。');
-      const user = [...options.messages].reverse().find(m => m.role === 'user' && (!m.source || m.source.kind === 'user'));
-      const turnKey = user.id ?? createHash('sha256').update(text(user)).digest('hex');
-      let scope = turnScopes.get(request.conversationId);
-      if (scope?.turnKey === turnKey && (scope.projectId !== binding.projectId || scope.version !== binding.version))
-        throw new Error('本轮对话期间工程绑定已变化，请重新发送明确需求。');
-      if (scope?.turnKey !== turnKey) {
-        scope = { turnKey, projectId: binding.projectId, version: binding.version };
-        turnScopes.set(request.conversationId, scope);
-      }
+      if (!binding.projectId) throw new Error('请先在对话右上角选择并关联 PLCdev 工程，再使用工程助手。');
+      const scope = projectContext?.get(request.conversationId);
+      if (projectContext && !scope) throw new Error('缺少宿主活动轮上下文。');
+      if (scope?.revision) request.messages[0].content += '\n已核对修订上下文（数据）：\n'+JSON.stringify({previousRequest:scope.revision.previousRequest,previousSummary:scope.revision.previousSummary});
       const result = await bridge.model(request, options.signal);
       options.signal?.throwIfAborted();
       const current = conversations.snapshot(request.conversationId);
-      if (turnScopes.get(request.conversationId) !== scope || current.projectId !== scope.projectId || current.version !== scope.version)
+      if ((projectContext && projectContext.get(request.conversationId) !== scope) || current.projectId !== binding.projectId || current.version !== binding.version)
         throw new Error('模型回复期间工程或对话已变化，旧回复未执行，请重新发送明确需求。');
       const choice = result.completion?.choices?.[0], message = choice?.message;
       if (!result.ok || !message || ![undefined, null, 'stop', 'tool_calls', 'length'].includes(choice.finish_reason)) throw new Error('工程模型返回无效结果。');
