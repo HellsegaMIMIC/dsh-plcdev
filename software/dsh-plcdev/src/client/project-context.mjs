@@ -1,6 +1,25 @@
 import {conversationApi} from './conversation-client.mjs';
-import {validateSnapshot,definitiveFailure} from './model.mjs';
+import {validateSnapshot,definitiveFailure,graphEntities} from './model.mjs';
 export const runtimeActions=[['start','canPrepare','编译并准备'],['runtime-start','canRun','运行 PLC'],['runtime-stop','canStop','停止 PLC'],['end','canEnd','结束运行实例']];
+// Opening a runtime view is separate from starting PLC execution or simulation.
+// Keep the sidebar and full workspace on the same configured-resource mapping.
+export function runtimeToolActions(snapshot){
+  const entities=graphEntities(snapshot),caps=snapshot?.capabilities||{},actions=[];
+  const hmi=entities.find(entity=>entity.hmi),scene=entities.find(entity=>entity.id==='scene'&&entity.tool);
+  if(hmi){
+    const reconnect=snapshot.hmiOpen&&!hmi.fuxa,capability=reconnect?'canReconnectHmi':'canShowHmi';
+    const allowed=caps[capability]===true;
+    actions.push({id:'hmi',label:reconnect?'重新打开运行画面':'打开运行画面',action:hmi.fuxa?'open-hmi':reconnect?'reopen-hmi':'show-hmi',capability,allowed,
+      reason:allowed?'':caps.reasons?.[capability]||'后台尚未确认运行画面可用。'});
+  }
+  if(scene){
+    const allowed=caps.tools?.[scene.tool]===true;
+    actions.push({id:'scene',label:'打开仿真场景',action:'tool',tool:scene.tool,capability:null,allowed,
+      reason:allowed?'':caps.reasons?.[scene.tool]||'后台尚未确认场景入口可用。',
+      note:scene.tool==='oip'?caps.reasons?.oipRuntime||'':''});
+  }
+  return actions;
+}
 // Display-only evidence from the latest successful status; never used to
 // authorize an action or persisted as a second source of Runtime ownership.
 function lastOwner(snapshot,at){
@@ -49,7 +68,14 @@ export function createProjectContexts({api=conversationApi,storage=()=>window.lo
       async action(action,tool){
         const s=state.snapshot;if(!s||state.busy||state.pending)return;
         const cap=runtimeActions.find(a=>a[0]===action)?.[1];
-        if(tool? s.capabilities?.tools?.[tool]!==true : !cap||s.capabilities?.[cap]!==true)return;
+        if(action==='tool'){
+          if(typeof tool!=='string'||!tool||s.capabilities?.tools?.[tool]!==true)return;
+        }else{
+          // A tool capability must never authorize a different action (e.g. RUN).
+          if(tool!==undefined)return;
+          const hmi=runtimeToolActions(s).find(item=>item.id==='hmi'&&item.action===action);
+          if(cap?s.capabilities?.[cap]!==true:hmi?.allowed!==true)return;
+        }
         const body={projectId,sessionId:s.session?.id??s.sessionId??null,action,client:'dsh-'+crypto.randomUUID(),sequence:1,expires:now()/1000+12,...(tool?{tool}:{})};
         try{storage().setItem(key,JSON.stringify(body));}catch{publish({notice:'无法保存操作身份，本次未发送。'});return;}
         publish({busy:true,pending:body,notice:'正在处理…'});

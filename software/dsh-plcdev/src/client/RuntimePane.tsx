@@ -1,6 +1,6 @@
 import React,{useEffect,useId,useRef,useState,useSyncExternalStore} from 'react';
 import {runtimeDockLabel} from './conversation-client.mjs';
-import {runtimeActions} from './project-context.mjs';
+import {runtimeActions,runtimeToolActions} from './project-context.mjs';
 import {monitoredVariables} from './overview-model.mjs';
 import {conversationApi} from './conversation-client.mjs';
 import {validateToolEnvironment} from './tool-distributions.mjs';
@@ -11,6 +11,7 @@ import {currentRuntimeIssues} from './runtime-relation.mjs';
 import {runtimeObservationFresh} from './model.mjs';
 
 const runtimeStyles=`
+.pc-runtime.pc-runtime-compact{overflow:hidden}
 .pc-runtime{--rt-line:var(--dsw-alias-border-l2,#dfe5ec);--rt-bg:var(--dsw-alias-bg-base,#fff);--rt-muted:var(--dsw-alias-label-secondary,#657184);--rt-soft:var(--dsw-alias-bg-module-platform,#f4f6f9);color:var(--dsw-alias-label-primary,#243247);min-width:0;overflow-wrap:anywhere;font:14px/1.6 var(--dsw-font-family,system-ui,sans-serif);background:var(--rt-bg);border:1px solid var(--rt-line);border-radius:12px;container-type:inline-size}
 .pc-runtime *{box-sizing:border-box}.pc-runtime p{margin:0}.pc-runtime button{font:inherit;font-size:13px;min-height:36px;color:inherit;border:1px solid var(--rt-line);border-radius:8px;background:var(--rt-bg);padding:6px 12px;cursor:pointer;white-space:normal}.pc-runtime button:hover:not(:disabled){background:var(--rt-soft)}.pc-runtime button:disabled{opacity:.46;cursor:default}.pc-runtime button:focus-visible,.pc-runtime summary:focus-visible{outline:2px solid var(--plcdev-accent,#7653bc);outline-offset:3px}
 .pc-runtime .pc-runtime-summary{padding:24px}.pc-runtime .pc-runtime-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}.pc-runtime .pc-runtime-heading>button{background:transparent;border-color:transparent;color:var(--rt-muted)}.pc-runtime .pc-runtime-state{font-size:22px;font-weight:600;letter-spacing:-.4px;display:flex;align-items:center;gap:12px}.pc-runtime .pc-runtime-state:before{content:'';width:10px;height:10px;border:3px solid var(--rt-muted);border-radius:50%;box-sizing:content-box;flex:none;opacity:.65}.pc-runtime .pc-runtime-state[data-state=running]:before{border-color:#16866d;box-shadow:0 0 0 4px color-mix(in srgb,#16866d 10%,var(--rt-bg));opacity:1}.pc-runtime .pc-runtime-state[data-state=fault]:before{border-color:#c06b28;opacity:1}.pc-runtime .pc-runtime-context{display:flex;align-items:center;flex-wrap:wrap;gap:6px 12px;margin-top:12px;font-size:13px;color:var(--rt-muted)}.pc-runtime .pc-runtime-context button{padding:4px 9px;font-size:13px}.pc-runtime .pc-runtime-muted{color:var(--rt-muted);font-size:13px}.pc-runtime .pc-runtime-load{margin-top:6px;font-size:13px;color:var(--rt-muted)}
@@ -28,6 +29,8 @@ const runtimeStyles=`
 .pc-runtime .pc-observation-tabs>button:focus-visible{outline:2px solid var(--plcdev-accent,#7653bc);outline-offset:2px}
 .pc-runtime .pc-observation-tabs small{align-self:center;font-size:11px;color:var(--rt-muted);margin-left:auto}
 @container(max-width:540px){.pc-runtime .pc-observation-tabs{padding-inline:16px;gap:0 18px}.pc-runtime .pc-observation-tabs small{flex-basis:100%;margin:0 0 12px}}
+.pc-runtime .pc-runtime-tools{padding:16px 24px;border-top:1px solid var(--rt-line)}.pc-runtime .pc-runtime-tools h4{margin:0 0 10px}.pc-runtime .pc-runtime-tool-actions{display:flex;flex-wrap:wrap;gap:10px}.pc-runtime .pc-runtime-tools p{margin-top:8px;font-size:12px;color:var(--rt-muted)}.pc-runtime .pc-runtime-relation-toggle{padding:16px}.pc-runtime .pc-runtime-relation-toggle>summary{font-size:13px;font-weight:600}.pc-runtime .pc-runtime-relation-toggle .pc-runtime-map{margin-top:12px}
+.pc-runtime.pc-runtime-compact .pc-runtime-summary{padding:16px}.pc-runtime.pc-runtime-compact .pc-runtime-state{font-size:17px}.pc-runtime.pc-runtime-compact .pc-runtime-context{margin-top:6px;font-size:12px}.pc-runtime.pc-runtime-compact .pc-runtime-controls{margin-top:14px}.pc-runtime.pc-runtime-compact .pc-runtime-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.pc-runtime.pc-runtime-compact .pc-runtime-action{display:block}.pc-runtime.pc-runtime-compact .pc-runtime-action>button{width:100%;min-width:0}.pc-runtime.pc-runtime-compact .pc-runtime-action small{display:none}.pc-runtime.pc-runtime-compact .pc-environment-note{font-size:12px;margin:8px 0 0}.pc-runtime.pc-runtime-compact .pc-runtime-tools{padding:14px 16px}.pc-runtime.pc-runtime-compact .pc-runtime-tool-actions>button{flex:1 1 130px}.pc-runtime.pc-runtime-compact .pc-runtime-notice{margin-top:10px}.pc-runtime.pc-runtime-compact .pc-project-tabs{padding-inline:16px;gap:24px}.pc-runtime.pc-runtime-compact .pc-project-tabs>button{min-height:44px;padding:10px 0 8px}
 `;
 
 function projectName(snapshot:any,id:string|undefined){
@@ -38,18 +41,19 @@ function projectName(snapshot:any,id:string|undefined){
   return typeof session?.projectName==='string'&&session.projectName.trim()?session.projectName:'工程名称未提供';
 }
 
-export function RuntimePane({projectId,projectContexts,onProject,sessionId,projectRevision=null}:any){
+export function RuntimePane({projectId,projectContexts,onProject,sessionId,projectRevision=null,compact=false,resources}:any){
   const controller=projectContexts.get(projectId),state=useSyncExternalStore(controller.subscribe,controller.snapshot),s=state.snapshot;
   const reasonId=useId();
   const [observation,setObservation]=useState('variables'),[source,setSource]=useState('all'),[node,setNode]=useState<string|null>(null);
+  const [section,setSection]=useState(resources?'resources':'runtime'),[relationOpen,setRelationOpen]=useState(false);
   const [environment,setEnvironment]=useState<any>(null),[toolsOpen,setToolsOpen]=useState(false),[environmentRefresh,setEnvironmentRefresh]=useState(0);
   const [eventData,setEventData]=useState<any>(null),[eventStale,setEventStale]=useState(true);
   const observationRef=useRef<HTMLDivElement>(null),mapRef=useRef<HTMLDivElement>(null),returnEventRef=useRef<HTMLElement|null>(null);
   useEffect(()=>{let cancelled=false;conversationApi('tool-environment').then(validateToolEnvironment).then(value=>{if(!cancelled)setEnvironment(value);}).catch(()=>{if(!cancelled)setEnvironment(null);});return()=>{cancelled=true;};},[environmentRefresh]);
-  useEffect(()=>{setObservation('variables');setSource('all');setNode(null);setEventData(null);setEventStale(true);},[projectId]);
+  useEffect(()=>{setObservation('variables');setSource('all');setNode(null);setEventData(null);setEventStale(true);setSection(resources?'resources':'runtime');setRelationOpen(false);},[projectId]);
   const issues=eventStale?{}:currentRuntimeIssues(eventData,s,projectRevision);
-  const showEvents=(filter:string)=>{setSource(filter);setObservation('events');setNode(null);requestAnimationFrame(()=>{observationRef.current?.scrollIntoView?.({block:'nearest'});observationRef.current?.querySelector<HTMLButtonElement>('[data-tab="events"]')?.focus({preventScroll:true});});};
-  const showNode=(filter:string)=>{returnEventRef.current=document.activeElement as HTMLElement;setNode(({compiler:'compiler',runtime:'runtime',fuxa:'hmi',oip:'oip',plcdev:'project'} as any)[filter]||'runtime');requestAnimationFrame(()=>mapRef.current?.scrollIntoView?.({block:'nearest'}));};
+  const showEvents=(filter:string)=>{setSection('runtime');setSource(filter);setObservation('events');setNode(null);requestAnimationFrame(()=>{observationRef.current?.scrollIntoView?.({block:'nearest'});observationRef.current?.querySelector<HTMLButtonElement>('[data-tab="events"]')?.focus({preventScroll:true});});};
+  const showNode=(filter:string)=>{returnEventRef.current=document.activeElement as HTMLElement;setSection('runtime');setRelationOpen(true);setNode(({compiler:'compiler',runtime:'runtime',fuxa:'hmi',oip:'oip',plcdev:'project'} as any)[filter]||'runtime');requestAnimationFrame(()=>mapRef.current?.scrollIntoView?.({block:'nearest'}));};
   const selectNode=(next:string|null)=>{setNode(next);if(!next&&returnEventRef.current?.isConnected){returnEventRef.current.scrollIntoView?.({block:'nearest'});returnEventRef.current.focus({preventScroll:true});returnEventRef.current=null;}};
   // Sampling can expire between status responses.
   const [,tick]=useState(0);
@@ -61,7 +65,11 @@ export function RuntimePane({projectId,projectContexts,onProject,sessionId,proje
   const runtimeLabel=s?runtimeDockLabel(s,projectId).replace('本工程未创建','尚未准备'):'当前状态无法确认';
   const owner=s?.runtimeOwner;
   const history=(!s||owner===undefined||owner?.state==='unknown')?state.lastRuntimeOwner:null;
-  return <section className="pc-runtime" aria-label="运行状态与监视">
+  const tools=runtimeToolActions(s);
+  const toolReason=(item:any)=>!s?'状态尚未确认':state.busy?'操作正在处理':state.pending?'请先核对上次操作结果':item.allowed?'':item.reason;
+  const relation=<RuntimeRelation snapshot={s} environment={environment} projectRevision={projectRevision} issues={issues} onEvents={showEvents} onEnvironment={()=>setToolsOpen(true)} selected={node} onSelect={selectNode}/>;
+  function run(action:string){if(compact){setSection('runtime');if(action==='start'){setObservation('events');setSource('all');}}controller.action(action);}
+  return <section className={'pc-runtime'+(compact?' pc-runtime-compact':'')} aria-label="运行状态与监视">
     <style>{runtimeStyles}</style>
     <style>{`.pc-runtime .pc-runtime-monitor{border-top:0}.pc-runtime .pc-environment-note{margin:12px 0 0;font-size:12px;color:var(--rt-muted)}.pc-runtime .pc-runtime-primary{background:var(--plcdev-accent,#7653bc);border-color:var(--plcdev-accent,#7653bc)}.pc-runtime .pc-runtime-primary:hover:not(:disabled){background:var(--plcdev-accent,#7653bc);border-color:var(--plcdev-accent,#7653bc);filter:brightness(.94)}.pc-runtime .pc-events-wrap{padding:0 24px 18px}.pc-runtime .pc-map-wrap{scroll-margin-top:15px}.pc-runtime [hidden]{display:none!important}@container(max-width:540px){.pc-runtime .pc-events-wrap{padding-inline:16px}}`}</style>
     <div className="pc-runtime-summary"><div className="pc-runtime-heading"><strong className="pc-runtime-state" data-state={runtimeLabel==='运行中'?'running':runtimeLabel==='异常'?'fault':undefined}>{runtimeLabel}</strong><button disabled={state.busy} onClick={()=>controller.refresh()}>刷新状态</button></div>
@@ -69,11 +77,18 @@ export function RuntimePane({projectId,projectContexts,onProject,sessionId,proje
     {s&&owner===undefined&&<p className="pc-runtime-context pc-runtime-muted">运行目标归属：未提供</p>}
     {history&&<p className="pc-runtime-context pc-runtime-muted">上次确认的运行归属（当前状态未知）：{projectName(s,history.projectId)}</p>}
     {s?.session?.active&&<p className="pc-runtime-load">装载版本：{s.links?.load?.label||'与当前工程的关系未确认'}</p>}
-    <div className="pc-map-wrap" ref={mapRef}><RuntimeRelation snapshot={s} environment={environment} projectRevision={projectRevision} issues={issues} onEvents={showEvents} onEnvironment={()=>setToolsOpen(true)} selected={node} onSelect={selectNode}/></div>
-    <p className="pc-environment-note">保留工程、编译并准备、运行 PLC 分别执行；工具入口已找到不代表编译或运行已验证。</p>
-    <div className="pc-runtime-controls">{commonReason&&<p className="pc-runtime-muted" id={reasonId}>{commonReason}</p>}<div className="pc-runtime-actions">{runtimeActions.map(([action,cap,label])=>{const disabled=reason(cap),description=commonReason?reasonId:disabled?reasonId+'-'+action:undefined;return <div className="pc-runtime-action" key={action}><button className={!disabled&&['start','runtime-start'].includes(action)?'pc-runtime-primary':undefined} disabled={!!disabled} aria-describedby={description} onClick={()=>controller.action(action)}>{label}</button>{disabled&&!commonReason&&<small id={description}>{disabled}</small>}</div>;})}</div></div>
+    {!compact&&<div className="pc-map-wrap" ref={mapRef}>{relation}</div>}
+    {!compact&&<p className="pc-environment-note">保留工程、编译并准备、运行 PLC 分别执行；工具入口已找到不代表编译或运行已验证。</p>}
+    <div className="pc-runtime-controls">{commonReason&&<p className="pc-runtime-muted" id={reasonId}>{commonReason}</p>}<div className="pc-runtime-actions">{runtimeActions.map(([action,cap,label])=>{const disabled=reason(cap),description=commonReason?reasonId:disabled?reasonId+'-'+action:undefined;return <div className="pc-runtime-action" key={action}><button className={!disabled&&['start','runtime-start'].includes(action)?'pc-runtime-primary':undefined} disabled={!!disabled} aria-describedby={description} title={disabled||(action==='end'?'保存并关闭本工程的运行实例及所属工具窗口':undefined)} onClick={()=>run(action)}>{label}</button>{disabled&&!commonReason&&<small id={description}>{disabled}</small>}</div>;})}</div></div>
+    {compact&&<p className="pc-environment-note">编译使用已保存版本，准备完成后再运行 PLC。</p>}
+    {compact&&s&&!s.session?.active&&!state.busy&&!state.pending&&!commonReason&&reason('canPrepare')&&<div className="pc-runtime-notice"><p>{reason('canPrepare')}</p><button onClick={()=>setToolsOpen(true)}>检查运行环境</button></div>}
     {(state.notice||state.error||state.pending)&&<div className="pc-runtime-notice" role="status">{(state.notice||state.error)&&<p>{state.notice||state.error}</p>}{state.pending&&<button disabled={!s||state.busy} onClick={()=>controller.acknowledge()}>已核对当前状态，解除待核对提示</button>}</div>}
-    </div><div ref={observationRef}><nav className="pc-observation-tabs" aria-label="运行观察内容"><button data-tab="variables" aria-pressed={observation==='variables'} onClick={()=>setObservation('variables')}>变量监视</button><button data-tab="events" aria-pressed={observation==='events'} onClick={()=>setObservation('events')}>运行事件{Object.values(issues).reduce((sum:number,n:any)=>sum+Number(n),0)>0?' · '+Object.values(issues).reduce((sum:number,n:any)=>sum+Number(n),0):''}</button><small>当前工程 · {eventStale?'事件状态待读取':'事件已读取'}</small></nav>
+    </div>
+    {resources&&<><nav className="pc-observation-tabs pc-project-tabs" aria-label="侧栏工程内容"><button aria-pressed={section==='resources'} onClick={()=>setSection('resources')}>工程资源</button><button aria-pressed={section==='runtime'} onClick={()=>setSection('runtime')}>运行与监视</button></nav><div hidden={section!=='resources'}>{resources}</div></>}
+    <div hidden={section!=='runtime'} data-runtime-content>
+    {tools.length>0&&<section className="pc-runtime-tools" aria-label="联调工具"><h4>联调工具</h4><div className="pc-runtime-tool-actions">{tools.map((item:any)=>{const disabled=toolReason(item);return <button key={item.id} disabled={!!disabled} title={disabled||undefined} onClick={()=>controller.action(item.action,item.tool)}>{item.label}</button>;})}</div>{tools.map((item:any)=>toolReason(item)&&<p key={item.id}>{item.label}：{toolReason(item)}</p>)}<p>{s?.capabilities?.reasons?.oipRuntime||'打开画面或场景不会自动启动 PLC。'}</p></section>}
+    {compact&&<div className="pc-map-wrap" ref={mapRef}><details className="pc-runtime-relation-toggle" open={relationOpen} onToggle={event=>setRelationOpen(event.currentTarget.open)}><summary>运行关系与环境</summary>{relation}</details></div>}
+    <div ref={observationRef}><nav className="pc-observation-tabs" aria-label="运行观察内容"><button data-tab="variables" aria-pressed={observation==='variables'} onClick={()=>setObservation('variables')}>变量监视</button><button data-tab="events" aria-pressed={observation==='events'} onClick={()=>setObservation('events')}>运行事件{Object.values(issues).reduce((sum:number,n:any)=>sum+Number(n),0)>0?' · '+Object.values(issues).reduce((sum:number,n:any)=>sum+Number(n),0):''}</button>{!compact&&<small>当前工程 · {eventStale?'事件状态待读取':'事件已读取'}</small>}</nav>
     <div hidden={observation!=='variables'} className="pc-runtime-monitor">{s?.session?.active?<>{variables.length?<table><thead><tr><th>变量</th><th>类型</th><th>值</th><th>数据质量</th></tr></thead><tbody>{variables.map((v:any)=><tr key={v.path}><td>{v.path}</td><td>{v.type}</td><td>{v.value}</td><td>{v.quality}</td></tr>)}</tbody></table>:<p className="pc-runtime-muted">后台尚未提供变量采样。</p>}{s.state?.requiresManualRecovery===true&&observationFresh&&<p className="pc-runtime-notice" role="status">需要在 HMI 核对批次数量后再恢复操作。</p>}</>:<p className="pc-runtime-muted">{s?'准备运行实例后可查看变量采样。':'变量采样不可用，请刷新状态。'}</p>}</div>
     <div className="pc-events-wrap" hidden={observation!=='events'}><RuntimeEvents key={projectId} projectId={projectId} projectRevision={projectRevision} source={source} onSourceChange={setSource} onNode={showNode} onEvents={(value:any,meta:any)=>{setEventData(value);setEventStale(meta.stale||!value);}}/></div></div>
     <details className="pc-runtime-diagnostics"><summary>实例信息</summary>
@@ -82,7 +97,7 @@ export function RuntimePane({projectId,projectContexts,onProject,sessionId,proje
       {s?.session?.active&&<p>装载程序摘要：<code>{s.session.programHash||'未提供'}</code></p>}
       <p>观察数据：{observationFresh?'有效':'无法确认'}</p>
       {history&&<><p>历史归属工程编号：<code>{history.projectId||'未提供'}</code> · 实例 <code>{history.sessionId}</code></p>{history.programHash&&<p>历史装载程序摘要：<code>{history.programHash}</code></p>}<p>历史归属核对时间：{new Date(history.observedAt).toLocaleString()}</p></>}
-    </details>
+    </details></div>
     {toolsOpen&&<ToolDownloads onClose={()=>setToolsOpen(false)} onChecked={()=>setEnvironmentRefresh(n=>n+1)}/>}
   </section>;
 }

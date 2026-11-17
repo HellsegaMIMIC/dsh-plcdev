@@ -1,6 +1,6 @@
 # 版本发布与下载
 
-**[打开 GitHub Releases](https://github.com/HellsegaMIMIC/dsh-plcdev/releases)** · [当前预览版 v0.5.11-preview.1](https://github.com/HellsegaMIMIC/dsh-plcdev/releases/tag/v0.5.11-preview.1) · [完整更新记录](CHANGELOG.md)
+**[打开 GitHub Releases](https://github.com/HellsegaMIMIC/dsh-plcdev/releases)** · [当前预览版 v0.5.12-preview.1](https://github.com/HellsegaMIMIC/dsh-plcdev/releases/tag/v0.5.12-preview.1) · [完整更新记录](CHANGELOG.md)
 
 GitHub Releases 是本项目的统一版本发布入口。每个版本有独立标签、更新说明、下载附件和验证范围。当前均为开发预览，不标记为稳定版。
 
@@ -8,7 +8,8 @@ GitHub Releases 是本项目的统一版本发布入口。每个版本有独立�
 
 | 版本 | 定位 | 主要变化 |
 | --- | --- | --- |
-| [v0.5.11-preview.1](https://github.com/HellsegaMIMIC/dsh-plcdev/releases/tag/v0.5.11-preview.1) | 当前预览 | 原创代码 MIT、组合包保留 GPL；首页配图与版本入口；工程功能沿用 0.5.10 |
+| [v0.5.12-preview.1](https://github.com/HellsegaMIMIC/dsh-plcdev/releases/tag/v0.5.12-preview.1) | 当前预览 | 对话侧栏编译、运行、监视与事件入口；共用工程状态与操作保护 |
+| [v0.5.11-preview.1](https://github.com/HellsegaMIMIC/dsh-plcdev/releases/tag/v0.5.11-preview.1) | 历史预览 | 原创代码 MIT、组合包保留 GPL；首页配图与版本入口；工程功能沿用 0.5.10 |
 | [v0.5.10-preview.1](https://github.com/HellsegaMIMIC/dsh-plcdev/releases/tag/v0.5.10-preview.1) | 历史预览 | 工程筛选、最近修改排序与工具准备界面；原 GPL 许可记录 |
 | [v0.5.9-preview.2](https://github.com/HellsegaMIMIC/dsh-plcdev/releases/tag/v0.5.9-preview.2) | 历史修订 | 全页一致性清理，修正 Windows 短路径测试 |
 | [v0.5.9-preview.1](https://github.com/HellsegaMIMIC/dsh-plcdev/releases/tag/v0.5.9-preview.1) | 已有后续修订 | 该版 CI 出现 Windows 短路径测试失败；保留原包与证据，优先选择 preview.2 或更新版本 |
@@ -28,8 +29,8 @@ GitHub Releases 是本项目的统一版本发布入口。每个版本有独立�
 例如，在 PowerShell 中核对下载的插件包：
 
 ```powershell
-Get-FileHash .\dsh-plcdev-0.5.11.tgz -Algorithm SHA256
-Get-Content .\dsh-plcdev-0.5.11.tgz.sha256
+Get-FileHash .\dsh-plcdev-0.5.12.tgz -Algorithm SHA256
+Get-Content .\dsh-plcdev-0.5.12.tgz.sha256
 ```
 
 两处的哈希应一致。源码 ZIP 同样可核对。

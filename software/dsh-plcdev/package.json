@@ -1,6 +1,6 @@
 {
   "name": "dsh-plcdev",
-  "version": "0.5.11",
+  "version": "0.5.12",
   "private": true,
   "type": "module",
   "description": "PLCdev project and candidate workbench for DeepSeek Harness",

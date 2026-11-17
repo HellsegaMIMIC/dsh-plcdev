@@ -1,6 +1,6 @@
 # 安装与接入
 
-0.5.11 是 Windows 源码开发预览，维护者基线为 Node 25、Python 3.13、日常 DSH 0.2.2。完整干净电脑安装尚未验收；不要把通过源码测试理解为所有原生工具已可运行。
+0.5.12 是 Windows 源码开发预览，维护者基线为 Node 25、Python 3.13、日常 DSH 0.2.2。完整干净电脑安装尚未验收；不要把通过源码测试理解为所有原生工具已可运行。
 
 ## 构建与状态目录
 
@@ -8,7 +8,7 @@
 
 执行 `python -B tools/plcdev_environment.py init` 后配置本机 `outputs/local/environment.json`。这里的路径只留在本机；不要上传配置、工程索引、候选账本、profile 或凭据。不同检出若共用同一 Runtime，应配置同一个 `state.runtimeOwnerDirectory`，不能换目录规避占用。
 
-大构建和缓存可放在 F 盘。本版 OIP 隔离编辑适配目前仍使用 `F:/PLCdev-build-temp/20261116/oip-native/runs` 和 `F:/PLCdev-build-temp/20261117/oip-editor-runtime`；没有 F 盘的环境尚需配置化适配，不能宣称直接可用。
+OIP 隔离编辑的缓存与会话目录默认放在仓库的 `outputs/workbench/oip`。可在启动工程服务前设置 `PLCDEV_OIP_WORK_DIR`，将大文件放到本机其他磁盘的绝对路径。Factory I/O 默认从系统 Program Files 查找，也可通过 `PLCDEV_FACTORYIO_EXE` 指定可执行文件。
 
 ## 原生工具与下载
 

@@ -26,7 +26,7 @@ from workbench_project_config import plain, validate_oip
 
 CATALOG = Path(__file__).with_name('oip_native_catalog.json')
 HOST = Path(__file__).with_name('oip_native_candidate_host.py')
-RUNS = Path('F:/PLCdev-build-temp/20261116/oip-native/runs')
+RUNS = Path(os.environ.get('PLCDEV_OIP_WORK_DIR', ROOT / 'outputs/workbench/oip')) / 'runs'
 RECEIPTS = ROOT / 'outputs/workbench/oip-native-receipts'
 CONTRACT_VERSION = 1
 MUTATIONS = frozenset(('add_part', 'update_part', 'delete_parts', 'duplicate_parts', 'snap_part'))

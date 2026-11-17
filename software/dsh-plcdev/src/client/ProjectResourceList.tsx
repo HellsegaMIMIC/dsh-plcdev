@@ -21,7 +21,7 @@ function reviewBlock(sessionId:string,task:any){
 /** The saved graph and this conversation's candidates are different versions.
  * Display them together, but keep their launch identities and permissions apart.
  */
-export function ProjectResourceList({sessionId,projectId,contexts,binding,controller,state,onOpenSaved,onOpenResultResource,savedBusy=false}:any){
+export function ProjectResourceList({sessionId,projectId,contexts,binding,controller,state,onOpenSaved,onOpenResultResource,savedBusy=false,embedded=false}:any){
   const reads=taskReadsFor(contexts),sameProject=binding.binding?.projectId===projectId;
   const refs=(binding.binding?.taskRefs||[]).filter((ref:any)=>ref.projectId===projectId);
   const key=JSON.stringify([sessionId,projectId,sameProject,binding.binding?.version,refs.map((ref:any)=>ref.taskId)]);
@@ -96,7 +96,7 @@ export function ProjectResourceList({sessionId,projectId,contexts,binding,contro
     finally{opening.current=false;if(alive.current)setBusy(false);}
   }
   return <section className="pc-project-resources" aria-label="工程资源状态"><style>{css}</style>
-    <div className="pc-resource-heading"><h3>工程资源</h3><button className="pc-project-quiet" disabled={sharedBusy} onClick={()=>refreshAll()}>刷新资源</button></div>
+    <div className="pc-resource-heading" style={embedded?{justifyContent:'flex-end',padding:'6px 0'}:undefined}>{!embedded&&<h3>工程资源</h3>}<button className="pc-project-quiet" disabled={sharedBusy} onClick={()=>refreshAll()}>刷新资源</button></div>
     {(resources.pending.length>0||pendingLoading||pendingError)&&<div className="pc-resource-section" data-pending>
       <h4>本会话待保留</h4>
       {pendingLoading&&<p className="pc-resource-state-message" role="status">正在读取本轮修改…</p>}

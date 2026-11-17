@@ -38,7 +38,12 @@ async function fixture({tasks=[proposal()],refs=tasks.map(({projectId,taskId})=>
   `,loader:'tsx',resolveDir:root},bundle:true,write:false,platform:'browser',target:'es2022',alias:{react:packages.resolve('react')},define:{'process.env.NODE_ENV':'"production"'}})).outputFiles[0].text;
   const {JSDOM,VirtualConsole}=packages('jsdom'),errors=[],posts=[],reads=[];
   const state={tasks:structuredClone(tasks),refs:structuredClone(refs),revision,allSaved,failTasks:false,holdTask:null,failStatus:false,holdStatus:null,boundProject:projectId,bindingVersion:1,editorReads:0};
-  const console=new VirtualConsole();console.on('jsdomError',error=>errors.push(error.message));
+  const console=new VirtualConsole();console.on('jsdomError',error=>{
+    // jsdom 22 cannot parse CSS container queries. This fixture checks behavior;
+    // responsive geometry is checked in a browser, while other errors still fail.
+    if(error.type==='css parsing'&&String(error.detail).includes('@container'))return;
+    errors.push(error.message);
+  });
   const snapshot=()=>({project:{id:projectId,name:'当前工程',plc:'plc/project.json',defaultMode:'fuxa-local',revision:state.revision,...(state.allSaved?{hmi:'hmi/main.fuxap',scene:'oip/project.json'}:{})},
     projects:[{id:projectId,name:'当前工程'}],projectRevision:state.revision,session:{id:null,active:false},runtimeOwner:null,
     capabilities:{tools:{plc:true,fuxa:state.allSaved,oip:state.allSaved}}});
@@ -61,6 +66,10 @@ async function fixture({tasks=[proposal()],refs=tasks.map(({projectId,taskId})=>
         const value=listing();if(state.holdTask){const held=state.holdTask;state.holdTask=null;return new Promise(resolve=>held(()=>resolve(response(value))));}
         return response(value);
       }
+      if(u.pathname.endsWith('/runtime-events'))return response({schemaVersion:1,projectId,projectRevision:state.revision,
+        observedAt:Date.now()/1000,currentSessionId:null,events:[],sources:[]});
+      if(u.pathname.endsWith('/tool-environment'))return response({ok:true,schemaVersion:1,configPath:'F:/fixture/environment.json',checkedAt:new Date().toISOString(),
+        tools:[{id:'openplc',key:'editor',state:'found'},{id:'fuxa',key:'fuxaPackage',state:'found'},{id:'oip',key:'oipExecutable',state:'found'}]});
       if(u.pathname.endsWith('/editor-open')){
         const body=JSON.parse(options.body);posts.push({path:u.pathname,body});
         if(slowEditor)return response(editorReceipt());

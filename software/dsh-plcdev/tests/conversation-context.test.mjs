@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createConversationContexts,bindingError,bindingBlockedReason} from '../src/client/conversation-context.mjs';
-import {createProjectContexts} from '../src/client/project-context.mjs';
+import {createProjectContexts,runtimeToolActions} from '../src/client/project-context.mjs';
 const flush=()=>new Promise(r=>setTimeout(r,0));
 const memory=()=>{const m=new Map();return {getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v),removeItem:k=>m.delete(k)};};
 const binding=(id,projectId='a',version=1)=>({conversationId:id,projectId,version,taskRefs:[],pendingRequests:[]});
@@ -88,6 +88,65 @@ test('runtime mutation is durable across unmount, never replays and fixes clicke
 });
 test('storage failure blocks runtime writes and failed reads hide old STOP',async()=>{
  let failure=false,posts=0;const contexts=createProjectContexts({storage:()=>{throw new Error('denied');},api:async(path,body)=>{if(body)posts++;if(failure)throw new Error('offline');return status('a');}}),c=contexts.get('a'),off=c.subscribe(()=>{});await flush();await c.action('start');assert.equal(posts,0);failure=true;await c.refresh();assert.equal(c.snapshot().snapshot,null);assert.match(c.snapshot().error,/无法确认/);off();contexts.dispose();
+});
+
+test('runtime tool choices follow configured resources and distinguish opening from execution',()=>{
+ const fuxa={...status('a'),project:{id:'a',defaultMode:'fuxa-local',hmi:'hmi/main.fuxap',scene:'scene/project.json'},
+  capabilities:{canShowHmi:true,tools:{oip:true},reasons:{oipRuntime:'通用 OIP 与 PLC 联动运行尚未接通。'}}};
+ const choices=runtimeToolActions(fuxa);
+ assert.deepEqual(choices.map(({id,action,tool,allowed})=>({id,action,tool,allowed})),[
+  {id:'hmi',action:'open-hmi',tool:undefined,allowed:true},{id:'scene',action:'tool',tool:'oip',allowed:true}]);
+ assert.match(choices[1].note,/尚未接通/);
+ assert.equal(runtimeToolActions({...fuxa,hmiOpen:true})[0].action,'open-hmi','FUXA continues to use its current runtime page');
+ const legacy={...status('a'),project:{id:'a',hmiExecutable:'hmi.exe'},capabilities:{canShowHmi:true,canReconnectHmi:false,reasons:{canReconnectHmi:'通道尚未核对'}}};
+ assert.equal(runtimeToolActions(legacy)[0].action,'show-hmi');
+ const reopened=runtimeToolActions({...legacy,hmiOpen:true})[0];
+ assert.equal(reopened.action,'reopen-hmi');assert.equal(reopened.allowed,false);assert.equal(reopened.reason,'通道尚未核对');
+ assert.deepEqual(runtimeToolActions({...status('a'),capabilities:{canShowHmi:true,tools:{oip:true}}}),[],'capabilities alone must not invent absent resources');
+ assert.deepEqual(runtimeToolActions(null),[]);
+ const declared={...status('a'),project:{id:'a',defaultMode:'fuxa-local',configuration:{hmiFile:'hmi/current.fuxap',sceneFile:'scene/current.json'}},
+  capabilities:{canShowHmi:false,tools:{oip:false},reasons:{canShowHmi:'画面版本待核对',oip:'其他工程正在占用'}}};
+ assert.equal(runtimeToolActions(declared)[0].reason,'画面版本待核对');
+ assert.equal(runtimeToolActions(declared)[1].tool,'oip');assert.equal(runtimeToolActions(declared)[1].reason,'其他工程正在占用');
+ const factory={...legacy,project:{...legacy.project,configuration:{sceneFile:'scene/current.factoryio'}},capabilities:{tools:{factory:false},reasons:{factory:'其他工程正在占用'}}};
+ assert.equal(runtimeToolActions(factory)[1].tool,'factory');assert.equal(runtimeToolActions(factory)[1].reason,'其他工程正在占用');
+});
+
+test('shared runtime controller opens the exact HMI view with project and instance identity but never starts it',async()=>{
+ for(const [project,hmiOpen,action,capability] of [
+  [{id:'a',defaultMode:'fuxa-local',hmi:'hmi/main.fuxap'},false,'open-hmi','canShowHmi'],
+  [{id:'a',hmiExecutable:'hmi.exe'},false,'show-hmi','canShowHmi'],
+  [{id:'a',hmiExecutable:'hmi.exe'},true,'reopen-hmi','canReconnectHmi'],
+ ]){
+  const disk=memory(),posts=[];let response={...status('a'),project,hmiOpen,session:{id:'run-a',active:false},capabilities:{[capability]:true}};
+  const contexts=createProjectContexts({storage:()=>disk,now:()=>10000,api:async(_path,body)=>{if(body){posts.push(body);return {ok:true};}return response;}}),c=contexts.get('a'),off=c.subscribe(()=>{});
+  try{
+   await flush();await c.action(action);await flush();assert.equal(posts.length,1);
+   assert.equal(posts[0].action,action);assert.equal(posts[0].projectId,'a');assert.equal(posts[0].sessionId,'run-a');assert.equal(posts[0].tool,undefined);assert.equal(posts[0].expires,22);
+   assert.equal(disk.getItem('plcdev.dsh.runtime.pending.a'),null);
+   response={...response,capabilities:{[capability]:false}};await c.refresh();await c.action(action);assert.equal(posts.length,1,'updated capability blocks another opening');
+  }finally{off();contexts.dispose();}
+ }
+});
+
+test('runtime controller rejects action and tool capability substitution and the wrong HMI lane',async()=>{
+ const posts=[],response={...status('a'),project:{id:'a',defaultMode:'fuxa-local',hmi:'hmi/main.fuxap'},capabilities:{canShowHmi:true,canReconnectHmi:true,canRun:false,tools:{oip:true}}};
+ const contexts=createProjectContexts({storage:memory,api:async(_path,body)=>{if(body){posts.push(body);return {ok:true};}return response;}}),c=contexts.get('a'),off=c.subscribe(()=>{});
+ try{
+  await flush();for(const [action,tool] of [['runtime-start','oip'],['start','oip'],['unknown','oip'],['open-hmi','oip'],['tool'],['tool','fuxa'],['show-hmi'],['reopen-hmi']])await c.action(action,tool);
+  assert.deepEqual(posts,[]);
+  await c.action('tool','oip');await flush();assert.equal(posts.length,1);assert.equal(posts[0].action,'tool');assert.equal(posts[0].tool,'oip');
+ }finally{off();contexts.dispose();}
+});
+
+test('an uncertain HMI opening is durable and never replays or authorizes subsequent runtime actions',async()=>{
+ const disk=memory(),posts=[];const response={...status('a'),project:{id:'a',defaultMode:'fuxa-local',hmi:'hmi/main.fuxap'},capabilities:{canShowHmi:true,canPrepare:true,tools:{oip:true}}};
+ const contexts=createProjectContexts({storage:()=>disk,api:async(_path,body)=>{if(body){posts.push(body);throw Object.assign(Error('outcome unknown'),{httpStatus:503});}return response;}}),c=contexts.get('a');let off=c.subscribe(()=>{});
+ try{
+  await flush();await c.action('open-hmi');await flush();assert.equal(c.snapshot().pending.action,'open-hmi');
+  off();off=c.subscribe(()=>{});await flush();assert.equal(c.snapshot().pending.action,'open-hmi');
+  await c.action('start');await c.action('tool','oip');await c.action('open-hmi');assert.equal(posts.length,1);assert.match(c.snapshot().notice,/不会自动重发/);
+ }finally{off();contexts.dispose();}
 });
 
 test('runtime disconnection keeps only labelled historical ownership and a free status clears it',async()=>{

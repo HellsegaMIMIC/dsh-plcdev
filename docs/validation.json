@@ -7,7 +7,7 @@
       "check": "npm-install",
       "exitCode": 0,
       "testCount": null,
-      "logSha256": "a6730232dc4e9f488363e882dd0abd6b170cb0063547710282e23cb4e725ff82"
+      "logSha256": "5537c21e9b23d1a909c11adc2d1458edf0810e24d6ecc6a39ab0d65180c10dac"
     },
     {
       "check": "plugin-build",
@@ -18,13 +18,13 @@
     {
       "check": "plugin-tests",
       "exitCode": 0,
-      "testCount": 712,
-      "passedCount": 690,
+      "testCount": 722,
+      "passedCount": 700,
       "failedCount": 0,
       "skippedCount": 22,
       "cancelledCount": 0,
       "todoCount": 0,
-      "logSha256": "064ca38c9ac3a1e2a881bb2a03bac079ef231bdc6e9bf3c909ce3501e0e82baf"
+      "logSha256": "a7a97eae96dbd492751f002c547973bf224fe2c0144d3c319f041defd99d77bf"
     },
     {
       "check": "project_interface",
@@ -34,7 +34,7 @@
       "failedCount": 0,
       "skippedCount": 0,
       "expectedFailureCount": 0,
-      "logSha256": "14e0a84e72bf76d28ab7a00f0c1daeaf3de0afc74d37188e37460e63b4190a21"
+      "logSha256": "aa60cf72d1a33d29aaae71feab7221d18f57b92ed3670eb0b5f058fd3fef6ca1"
     },
     {
       "check": "plcdev_environment",
@@ -44,7 +44,7 @@
       "failedCount": 0,
       "skippedCount": 0,
       "expectedFailureCount": 0,
-      "logSha256": "3f0ed6caf90ad0b7267bb97476479822d536fe183683c7da509761f25a76e791"
+      "logSha256": "fa114a505cd8aa4000b77529abd4f53779e783834215d3239c439bb7a0d6ffb1"
     },
     {
       "check": "workbench_empty_catalog",
@@ -54,7 +54,7 @@
       "failedCount": 0,
       "skippedCount": 0,
       "expectedFailureCount": 0,
-      "logSha256": "1975ecdc3d9c5a2272ef9802ddf468985e4e08004194eeea2316db8307ef36a5"
+      "logSha256": "cbbce618e63fae7763ea0ff665e05ccaf77a8222c24f0d8809a2940b833f799e"
     },
     {
       "check": "verify_source_release",
@@ -64,7 +64,7 @@
       "failedCount": 0,
       "skippedCount": 0,
       "expectedFailureCount": 0,
-      "logSha256": "970e3354aa3056bb1473c561483d8e8ad82f64a437da7081f8efe3dcb074eedd"
+      "logSha256": "fd2f772738f9fe4598f49456bb37bc681414e56d9f5aa5a40c4f491976339b8e"
     },
     {
       "check": "workbench_fuxa_oip",
@@ -74,7 +74,7 @@
       "failedCount": 0,
       "skippedCount": 0,
       "expectedFailureCount": 0,
-      "logSha256": "a16b981f56050d87fcb04d947787e5cdb766acfaee5024c16f04e223f68d99eb"
+      "logSha256": "85d3afef1074fbd8d51586148bc5c322270728a212283f0ef108f94286daf5c4"
     },
     {
       "check": "agent_revisions",
@@ -84,7 +84,7 @@
       "failedCount": 0,
       "skippedCount": 0,
       "expectedFailureCount": 0,
-      "logSha256": "7566a5b2a3652f6d8a3ee7387d543ff2cba41c1ad88289cb232b4b1caae1c042"
+      "logSha256": "44a8d1bb76be4a0bb41b9a5e9942ef3b592b2966b11c7ceb52c2ab61edb5aca8"
     },
     {
       "check": "workbench_runtime_events",
@@ -94,7 +94,7 @@
       "failedCount": 0,
       "skippedCount": 0,
       "expectedFailureCount": 0,
-      "logSha256": "cc44f0ac514686242e6519c6a24cf8cca50e235de48529341d4a29d7f7f4fdf2"
+      "logSha256": "e947e265fb4ba78f60c80c0049ffe72015e132e810225dc44c07b2ac93edcd5b"
     },
     {
       "check": "workbench_oip_tools",
@@ -104,7 +104,7 @@
       "failedCount": 0,
       "skippedCount": 0,
       "expectedFailureCount": 0,
-      "logSha256": "3758cfa87a9c7a77a51a54b737d2b0d303057cca6e3d5bb95c4a12f9ee89e7f1"
+      "logSha256": "a3f00760d63ac9fb2ea927e947d274d137c2a7f17ea5d7b34289fbc00d3735ab"
     },
     {
       "check": "workbench_oip_creation",
@@ -114,7 +114,7 @@
       "failedCount": 0,
       "skippedCount": 0,
       "expectedFailureCount": 0,
-      "logSha256": "a92c83011d9d3cb2f4faf6d73eeb56a8717c6d65f917a0dc22e2a45e0887abc5"
+      "logSha256": "b118fa45cab4e3cc2d03d51bf3059af40f2aa9f4251ac7213b467e233d195f18"
     },
     {
       "check": "workbench_project_metadata",
@@ -124,13 +124,13 @@
       "failedCount": 0,
       "skippedCount": 0,
       "expectedFailureCount": 0,
-      "logSha256": "da71dc69c67850ddd27b516838e8f810ada58ac385194b9ae7168656f99aa7ba"
+      "logSha256": "d7d18198ce03aa86c031df7dbafa2381fba6058832a72bccc443b854cf80112e"
     },
     {
       "check": "source-audit",
       "exitCode": 0,
       "testCount": null,
-      "logSha256": "251ec969a602fa55caa552a7dc3505e07f9be3bd7a2ba9a8008338b32352c218"
+      "logSha256": "b41249272e7c828254bb87fc77bfd9b6ace75c5abb1ee4fc9256f04357140c6a"
     }
   ],
   "examplesIncluded": false,

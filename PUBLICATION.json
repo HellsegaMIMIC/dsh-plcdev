@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "version": "0.5.11",
+  "version": "0.5.12",
   "status": "development-preview",
   "publicationAuthorized": true,
   "repository": "https://github.com/HellsegaMIMIC/dsh-plcdev",
@@ -14,10 +14,10 @@
     "Custom OpenPLC build/source prerequisites remain external",
     "No hardware, timing or classroom acceptance"
   ],
-  "releaseTag": "v0.5.11-preview.1",
+  "releaseTag": "v0.5.12-preview.1",
   "originalCodeLicense": "MIT",
   "distributionLicense": "GPL-3.0-only",
   "licenseScopeDocument": "LICENSE-CHOICE.md",
   "licenseUpdated": "2026-11-18",
-  "codeBaseline": "v0.5.10-preview.1"
+  "codeBaseline": "v0.5.11-preview.1"
 }

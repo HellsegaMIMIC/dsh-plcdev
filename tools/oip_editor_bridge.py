@@ -6,6 +6,7 @@ integrity remain enabled. No arbitrary renderer evaluation or script endpoint.
 from __future__ import annotations
 import hashlib
 import json
+import os
 import shutil
 import threading
 from pathlib import Path
@@ -15,7 +16,7 @@ from oip_project_bootstrap import (read_asar, asar_entry, write_asar,
     update_integrity_resource, header_hash, integrity_resource)
 
 VERSION = '2026.11.9'
-CACHE = Path('F:/PLCdev-build-temp/20261117/oip-editor-runtime')
+CACHE = Path(os.environ.get('PLCDEV_OIP_WORK_DIR', Path(__file__).resolve().parents[1] / 'outputs/workbench/oip')) / 'editor-runtime'
 ASSETS = {'commands-Dw495zma.js':'268b14e3ad7cea24e571cea2cbd920e0278cf09d7ba76099e12279dd17ad435f',
           'sceneFile-igN4MfU8.js':'647181cec17020a2541067d0d1dcc7b4b3e066191d3f1064a9fa603954b8b771',
           'scene-rDPG7kE9.js':'941bbc42767f0aab9e539acec91dbe8ca7b4b53678be191d1dba84f69b18f49a',

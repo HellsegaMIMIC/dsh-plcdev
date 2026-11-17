@@ -18,7 +18,7 @@ from launch_fuxa_oip import identity,open_port
 from oip_batch_mcp import call as native_call,require_open_project
 from workbench_start_stop import env,NO_WINDOW
 
-PROFILES=Path('F:/PLCdev-build-temp/20261116/oip-editor-sessions')
+PROFILES=Path(os.environ.get('PLCDEV_OIP_WORK_DIR', ROOT / 'outputs/workbench/oip')) / 'editor-sessions'
 
 # OIP 2026.11.9 scene-rDPG7kE9.js Se() rounds integer-step parameters
 # before export. The reviewed native belt speedUnitParams declares speedFpm
