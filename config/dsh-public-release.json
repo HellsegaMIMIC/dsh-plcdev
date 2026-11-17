@@ -27,7 +27,8 @@
     "test_workbench_agent_adapters",
     "test_workbench_runtime_events",
     "test_workbench_oip_tools",
-    "test_workbench_oip_creation"
+    "test_workbench_oip_creation",
+    "test_workbench_project_metadata"
   ],
   "toolFiles": [
     "tools/plcdev_environment.ps1",

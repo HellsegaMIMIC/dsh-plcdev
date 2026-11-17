@@ -28,4 +28,5 @@ jobs:
       - run: python -B -X utf8 -m unittest discover -s tools -p test_workbench_runtime_events.py
       - run: python -B -X utf8 -m unittest discover -s tools -p test_workbench_oip_tools.py
       - run: python -B -X utf8 -m unittest discover -s tools -p test_workbench_oip_creation.py
+      - run: python -B -X utf8 -m unittest discover -s tools -p test_workbench_project_metadata.py
       - run: python -B -X utf8 tools/verify_source_release.py .

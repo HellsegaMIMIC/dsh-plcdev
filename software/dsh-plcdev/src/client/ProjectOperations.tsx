@@ -13,10 +13,11 @@ function loadPending(){
  if(!value||typeof value.requestId!=='string'||!/^[A-Za-z0-9_-]{1,100}$/.test(value.requestId)||typeof value.projectId!=='string'||(value.conversationId!==undefined&&!validConversationId(value.conversationId))||(value.target!==undefined&&(typeof value.target!=='string'||value.target.length>4096||/[\x00-\x1f]/.test(value.target)))||!['project-create','project-open','project-configure','project-interface-configure','project-oip-configure'].includes(value.action))throw new Error('保存的工程操作记录无法核验；请保留现场，检查工程目录。');
  return value;
 }
-export function ProjectOperations({snapshot,connected,onChanged,mode,initialSection='interface',context,contextId}:any){
+export function ProjectOperations({snapshot,connected,onChanged,mode,initialSection,context,contextId}:any){
  const [form,setForm]=useState({action:'project-create',name:'',parent:'',language:'st',simulation:'none',source:'',manifestPath:'',hmiSource:'',oipSource:'',bindingsSource:'',definition:''});
  const [pending,setPending]=useState<any>(null),[feedback,setFeedback]=useState({text:'',tone:'warning'}),[busy,setBusy]=useState(false),[storageFailed,setStorageFailed]=useState(false),[configBasis,setConfigBasis]=useState<any>(null);
- const [section,setSection]=useState(initialSection);
+ const [section,setSection]=useState(initialSection||'interface'),[expanded,setExpanded]=useState(initialSection==='oip');
+ useEffect(()=>{if(initialSection==='oip'){setSection('oip');setExpanded(true);}},[initialSection]);
  const error=feedback.text,setError=(text:string)=>setFeedback({text,tone:'warning'}),setNotice=(text:string)=>setFeedback({text,tone:'neutral'});
  const lock=useRef(false),mounted=useRef(true),projectRef=useRef(snapshot?.project?.id);
  const conversationOwner=context==='conversation'&&validConversationId(contextId)?contextId:null,conversationRef=useRef(conversationOwner);
@@ -73,16 +74,18 @@ export function ProjectOperations({snapshot,connected,onChanged,mode,initialSect
   }catch(e:any){if(mounted.current){if([400,403,413].includes(e?.httpStatus)){try{persist(null);setError(e.message||'请求未发送，请检查表单。');}catch{setStorageFailed(true);setError('请求被拒绝，但无法清除本地恢复记录，请核对后处理。');}}else setError('操作结果尚未确认，请核对原请求与工程目录，勿重复提交。');}}
   finally{lock.current=false;if(mounted.current)setBusy(false);}
  }
- return <section className="pc-operations" aria-label={catalog?'工程管理':'工程配置'}>
+ return <section className={'pc-operations'+(catalog?'':' pc-operations-advanced')} aria-label={catalog?'工程管理':'工程配置'}>
   <style>{`
 .pc-operations{--op-line:var(--dsw-alias-border-l2,#dfe5ec);--op-muted:var(--dsw-alias-label-secondary,#657184);color:var(--dsw-alias-label-primary,#243247);background:var(--dsw-alias-bg-base,#fff);border:1px solid var(--op-line);border-radius:12px;padding:24px;min-width:0;overflow-wrap:anywhere;font:14px/1.6 var(--dsw-font-family,system-ui,sans-serif);box-sizing:border-box;container-type:inline-size}.pc-operations summary{font-size:14px;font-weight:600;cursor:pointer;line-height:24px}.pc-operations form{margin-top:24px}.pc-operations label{display:grid;gap:8px;font-size:13px;font-weight:500}.pc-operations :is(input,select,textarea){font:inherit;color:inherit;background:var(--dsw-alias-bg-base,#fff);border:1px solid var(--op-line);border-radius:7px;min-height:40px;min-width:0;max-width:100%;padding:8px 10px!important}.pc-operations textarea{font:12px/1.7 var(--ds-font-family-code,monospace);resize:vertical}.pc-operations p{font-size:13px;color:var(--op-muted);line-height:1.7;margin:0}.pc-operations>p,.pc-operations>:is([role=status],[role=alert]){margin-bottom:20px}.pc-operations :is([role=status],[role=alert]){border-left:3px solid var(--op-line);padding:10px 14px;background:var(--dsw-alias-bg-module-platform,#f4f6f9);border-radius:6px}.pc-operations [data-tone=warning]{border-left-color:#bd893c}.pc-operations button{font:inherit;font-size:13px;min-height:36px;padding:6px 12px;border:1px solid var(--op-line);border-radius:8px;background:var(--dsw-alias-bg-base,#fff);color:inherit;cursor:pointer;justify-self:start}.pc-operations button:disabled{opacity:.46;cursor:default}.pc-operations button[type=submit]{background:var(--plcdev-accent,#7653bc);border-color:var(--plcdev-accent,#7653bc);color:var(--plcdev-on-accent,#fff)}.pc-operations button[type=submit]:hover:not(:disabled){filter:brightness(.94)}.pc-operations :is(button,input,select,textarea,summary):focus-visible{outline:2px solid var(--plcdev-accent,#7653bc);outline-offset:3px}
 @container(max-width:540px){.pc-operations form{gap:16px!important}.pc-operations summary{font-size:13px}}@media(max-width:640px){.pc-operations{padding:18px 16px}}
 
 .pc-operations summary{list-style:none;display:flex;align-items:center;gap:10px}.pc-operations summary::-webkit-details-marker{display:none}.pc-operations summary:before{content:'';display:inline-block;width:6px;height:6px;flex:none;border-right:1.5px solid currentColor;border-top:1.5px solid currentColor;transform:rotate(45deg);margin-right:2px}.pc-operations details[open]>summary:before{transform:rotate(135deg)}
+.pc-operations.pc-operations-advanced{background:transparent;border-color:transparent;padding:14px 4px}.pc-operations-advanced>details>summary{font-size:13px;font-weight:500;color:var(--op-muted)}.pc-operations-advanced>details>p{margin-top:12px}.pc-operations-advanced form{margin-top:16px}
 `}</style>
   {pending&&<div role="status" data-tone="warning"><strong>工程操作待核对</strong><p>原工程：{pending.projectId} · 请求编号：{pending.requestId}。结果未知时不会自动重发。{pending.target&&<span> {pending.target}</span>}</p><button disabled={busy} onClick={check}>核对原请求</button> <button disabled={busy} onClick={acknowledge}>已核对目录，允许新操作</button><p>解除限制不会撤销或重发原操作；请先检查工程目录及配置。</p></div>}
   {error&&<p role={feedback.tone==='warning'?'alert':'status'} data-tone={feedback.tone}>{error}</p>}
-  <details open={!catalog}><summary>{catalog?'新建、导入或打开工程':'画面、场景与变量配置'}</summary>
+  <details open={expanded} onToggle={event=>setExpanded(event.currentTarget.open)}><summary>{catalog?'新建、导入或打开工程':'高级配置 · 画面、场景与变量'}</summary>
+   {!catalog&&<p>手动导入资源或编辑绑定，保存将直接更新当前工程。日常修改可在 DSH 对话中完成。</p>}
    {!catalog&&oipSection&&<div role="group" aria-label="配置内容" style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:16}}><button type="button" aria-pressed={section!=='oip'} disabled={busy||!!pending} onClick={()=>setSection('interface')}>变量与画面</button><button type="button" aria-pressed={section==='oip'} disabled={busy||!!pending} onClick={()=>setSection('oip')}>关联 OIP 场景</button></div>}
    <form style={styles} onSubmit={submit}>
     {catalog?<><label>操作 <select value={form.action} onChange={e=>field('action',e.target.value)}><option value="project-create">新建／导入 OpenPLC 工程</option><option value="project-open">打开已有 PLCdev 工程</option></select></label>

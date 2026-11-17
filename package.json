@@ -1,6 +1,6 @@
 {
   "name": "dsh-plcdev-source",
-  "version": "0.5.9",
+  "version": "0.5.10",
   "license": "GPL-3.0-only",
   "private": true,
   "type": "module",

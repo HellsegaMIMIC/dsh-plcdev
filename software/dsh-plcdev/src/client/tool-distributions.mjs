@@ -8,6 +8,12 @@ export const toolDistributions=[
   {id:'msys',key:'msys',name:'PLC 编译环境',edition:'Runtime 配套 MSYS 与构建工具 · 不包含在 DSH 编辑预览包中',kind:'安装说明',repository:'https://github.com/Autonomy-Logic/openplc-runtime',installation:'https://github.com/Autonomy-Logic/openplc-runtime#readme',official:'https://autonomylogic.com/products/runtime',availability:'随匹配的 Runtime Windows 环境准备',pathHint:'匹配 Runtime 的 msys64 目录；检查 usr/bin 下的 bash、g++、cmake 和 make'},
 ];
 
+// Installation is grouped for users; probes/configuration retain separate identities.
+export const toolInstallGroups=toolDistributions.filter(tool=>tool.id!=='msys').map(tool=>({
+  ...tool,name:tool.id==='runtime'?'Runtime 与编译依赖':tool.name,
+  members:tool.id==='runtime'?['runtime','msys']:[tool.id],
+}));
+
 export function validateToolEnvironment(value){
   if(value?.ok!==true||value.schemaVersion!==1||!Array.isArray(value.tools)||value.tools.length<3||value.tools.length>5||typeof value.configPath!=='string'||typeof value.checkedAt!=='string')throw new Error('工具检测结果未获确认。');
   const seen=new Set();

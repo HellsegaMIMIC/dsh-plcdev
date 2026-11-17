@@ -1,6 +1,6 @@
 import {BrandTitle} from './Brand';
 import React, {useEffect, useState, useRef, useMemo} from 'react';
-import {filterProjects, projectLocation} from './project-list.mjs';
+import {filterProjects, projectLocation, projectModifiedLabel} from './project-list.mjs';
 import {useConversationContext} from './useConversationContext';
 import {conversationApi} from './conversation-client.mjs';
 import {bindingBlockedReason} from './conversation-context.mjs';
@@ -10,12 +10,18 @@ import {ProjectOperations} from './ProjectOperations';
 const projectListStyles=`
 .pc-project-list,.pc-project-picker{--pc-text:var(--dsw-alias-label-primary,#263242);--pc-muted:var(--dsw-alias-label-secondary,#647184);--pc-border:var(--dsw-alias-border-l2,#dfe4eb);--pc-surface:var(--dsw-alias-bg-base,#fff);--pc-subtle:var(--dsw-alias-bg-module-platform,#f5f7fa);--pc-accent:var(--plcdev-accent);color:var(--pc-text);font-family:var(--dsw-font-family,inherit);font-size:14px;line-height:1.5;box-sizing:border-box}
 .pc-project-list *,.pc-project-picker *{box-sizing:border-box}
-.pc-project-list{display:grid;gap:16px;width:100%;max-width:1120px;min-width:0}
+.pc-project-list{display:grid;gap:16px;width:100%;max-width:1120px;min-width:0;container:project-list / inline-size}
 .pc-project-search{display:grid;gap:8px;color:var(--pc-muted);font-size:13px;font-weight:500}
 .pc-project-search-field{display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;background:var(--pc-surface);border:1px solid var(--pc-border);border-radius:8px}
 .pc-project-search-field:focus-within{border-color:var(--pc-accent);outline:2px solid color-mix(in srgb,var(--pc-accent) 16%,transparent);outline-offset:1px}
 .pc-project-search-field svg{flex-shrink:0}
 .pc-project-search-field input{min-width:0;width:100%;height:100%;padding:0!important;border:0!important;border-radius:0;background:transparent!important;color:var(--pc-text);font:inherit;outline:none!important;box-shadow:none!important}
+.pc-project-filters{display:grid;grid-template-columns:minmax(180px,1fr) 150px 150px;align-items:end;gap:12px}
+.pc-project-filter{display:grid;gap:8px;font-size:13px;color:var(--pc-muted)}
+.pc-project-filter select{width:100%;min-width:0;height:40px;padding:0 10px;border:1px solid var(--pc-border);border-radius:8px;background:var(--pc-surface);color:var(--pc-text);font:inherit;box-sizing:border-box}
+.pc-project-filter select:focus-visible{outline:2px solid var(--pc-accent);outline-offset:2px}
+.pc-project-match-count{font-size:12px;color:var(--pc-muted);margin:0}
+@container project-list (max-width:640px){.pc-project-filters{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.pc-project-search{grid-column:1/-1}}
 .pc-project-rows{border:1px solid var(--pc-border);border-radius:12px;background:var(--pc-surface);overflow:hidden}
 .pc-project-row{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:16px;padding:16px 24px;align-items:center}
 .pc-project-row+.pc-project-row{border-top:1px solid var(--pc-border)}
@@ -55,14 +61,15 @@ function ProjectCount({id}:any){
   return <span className="pc-project-count">关联会话数：{count===null?'未确认':count}</span>;
 }
 export function ProjectList({projects,currentId,action,onChoose,disabled}:any){
-  const [query,setQuery]=useState(''),[page,setPage]=useState(0);
+  const [query,setQuery]=useState(''),[page,setPage]=useState(0),[tool,setTool]=useState('all'),[sort,setSort]=useState('modified');
   const search=useRef<HTMLInputElement>(null);useEffect(()=>{search.current?.focus({preventScroll:true});},[]);
-  const filtered=filterProjects(projects,query), pages=Math.max(1,Math.ceil(filtered.length/5)), currentPage=Math.min(page,pages-1);
+  const filtered=useMemo(()=>filterProjects(projects,query,{tool,sort}),[projects,query,tool,sort]), pages=Math.max(1,Math.ceil(filtered.length/5)), currentPage=Math.min(page,pages-1);
   return <div className="pc-project-list">
     <style>{projectListStyles}</style>
-    <label className="pc-project-search">搜索工程名称或路径
+    <div className="pc-project-filters"><label className="pc-project-search">搜索工程名称或路径
       <span className="pc-project-search-field"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input ref={search} aria-label="搜索工程名称或路径" value={query} onChange={e=>{setQuery(e.target.value);setPage(0);}}/></span>
-    </label>
+    </label><label className="pc-project-filter">工程内容<select aria-label="筛选工程内容" value={tool} onChange={e=>{setTool(e.target.value);setPage(0);}}><option value="all">全部工程</option><option value="plc">含 PLC 程序</option><option value="hmi">含 HMI 画面</option><option value="scene">含仿真场景</option></select></label><label className="pc-project-filter">排序<select aria-label="工程排序" value={sort} onChange={e=>{setSort(e.target.value);setPage(0);}}><option value="modified">最近修改</option><option value="name">工程名称</option></select></label></div>
+    <p className="pc-project-match-count">{query||tool!=='all'?`${filtered.length} / ${projects?.length||0} 个工程`:`${filtered.length} 个工程`}</p>
     <div className="pc-project-rows">
       {filtered.slice(currentPage*5,currentPage*5+5).map((p:any)=><article key={p.id} className="pc-project-row" data-current={p.id===currentId}>
         <span className="pc-project-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3Z"/><path d="M3 10h18M9 14h6M12 12v5"/></svg></span>
@@ -72,12 +79,13 @@ export function ProjectList({projects,currentId,action,onChoose,disabled}:any){
           <div className="pc-project-meta">
             <span className="pc-project-tools">{Array.isArray(p.toolchain)?p.toolchain.length?p.toolchain.map((tool:any,i:number)=><span key={i} className="pc-project-tool"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" aria-hidden="true"><rect x="1" y="2" width="10" height="8" rx="1"/><path d="M3 5h6M3 7h4"/></svg><span>{tool.role||'资源'} {tool.name||'工具未提供'}</span></span>):'工具链未配置':'工具链未提供'}</span>
             <ProjectCount id={p.id}/>
+            <span className="pc-project-modified" title="已保存工程文件的最近修改时间">{projectModifiedLabel(p)}</span>
             {p.runtimeStatus&&<span className="pc-project-runtime">上次运行状态：{({RUNNING:'运行中',RUN:'运行中',STOPPED:'已停止',STOP:'已停止',unknown:'状态未确认'} as any)[p.runtimeStatus]||'状态未确认'}</span>}
           </div>
         </div>
         <button className="pc-project-select" disabled={disabled||action==='用于当前对话'&&p.id===currentId} onClick={()=>onChoose(p.id)}>{action}</button>
       </article>)}
-      {!filtered.length&&<p className="pc-project-empty">{query?'没有匹配的工程。':'工程清单为空或尚未读取。'}</p>}
+      {!filtered.length&&<p className="pc-project-empty">{query||tool!=='all'?'没有匹配的工程。':'工程清单为空或尚未读取。'}</p>}
     </div>
     {pages>1&&<nav className="pc-project-pagination" aria-label="工程分页"><button className="pc-project-page-button" disabled={currentPage===0} onClick={()=>setPage(currentPage-1)}>上一页</button><span>{currentPage+1} / {pages}</span><button className="pc-project-page-button" disabled={currentPage===pages-1} onClick={()=>setPage(currentPage+1)}>下一页</button></nav>}
   </div>;
@@ -104,7 +112,7 @@ export function ConversationProjectPicker({contexts,sessionId,onReturn,snapshot,
     if(current.binding?.version!==binding?.version||current.binding?.projectId!==binding?.projectId){setCreationNotice('工程已创建；当前对话关联已变化，请重新选择要使用的工程。');return;}
     await choose(result.projectId);
   }
-  return <section className="pc-project-picker plcdev-scope plcdev-rail" aria-label="选择当前对话工程">
+  return <section className="pc-project-picker plcdev-scope" aria-label="选择当前对话工程">
     <div className="pc-project-picker-content">
       <button className="pc-project-picker-button pc-project-picker-back" onClick={onReturn}>← 返回对话</button>
       <header className="pc-project-picker-heading"><h1><BrandTitle>选择当前对话工程</BrandTitle></h1><div style={{display:'flex',gap:8,flexWrap:'wrap'}}>{onToolDownloads&&<button className="pc-project-picker-button" onClick={onToolDownloads}>工具下载与安装</button>}<button className="pc-project-picker-button" onClick={()=>state.controller.refresh()}>重新读取</button></div></header>

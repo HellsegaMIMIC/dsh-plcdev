@@ -11,6 +11,7 @@ from plcdev_environment import tool_path
 from plcdev_runtime_owner import FileLease, owner, LOCK as RUNTIME_LOCK
 from workbench_factoryio import preflight as factory_preflight, show_existing as show_factory_window
 from workbench_projects import DEFAULT_PROJECT_ID, PROJECTS, ProjectCatalog
+from workbench_project_metadata import ProjectModificationCache
 
 HOME = Path(os.environ.get('PLCDEV_WORKBENCH_HOME',str(ROOT/'outputs/workbench'))).resolve()
 DESCRIPTOR = HOME/'controller.json'
@@ -437,6 +438,7 @@ class Workspace:
         else:self.managers=managers
         self._catalog_stamp=None;self._catalog_refresh_error=None
         self.previous_managers={};self.resource_preview_managers=[];self._saved_version_sync={}
+        self._project_modifications=ProjectModificationCache()
 
     def _sync_new_projects(self):
         """Notice registrations from the task service without retargeting live owners."""
@@ -641,6 +643,7 @@ class Workspace:
         with self.lock:projects=list(self.projects.values())
         def catalog_item(item):
             result={k:item.get(k) for k in ('id','name','description','kind','defaultMode','manifestPath')}
+            result.update(modifiedAt=self._project_modifications.get(item),modifiedAtSource='saved-project-files')
             mode=item.get('defaultMode')
             tools=[]
             if item.get('plc'):tools.append(dict(role='PLC',name='OpenPLC'))

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {filterProjects,projectLocation} from '../src/client/project-list.mjs';
+import {filterProjects,projectLocation,projectModifiedTime,projectModifiedLabel} from '../src/client/project-list.mjs';
 import {packages,buildTools} from './dependencies.mjs';
 import {fileURLToPath} from 'node:url';
 import {dirname} from 'node:path';
@@ -10,6 +10,29 @@ test('same-name projects are searchable by their real paths; missing locations s
   assert.deepEqual(filterProjects(projects,'TWO').map(p=>p.id),['b']);
   assert.deepEqual(filterProjects(projects,'相同').map(p=>p.id),['a','b']);
   assert.equal(projectLocation(projects[0]),'D:\\one');assert.equal(projectLocation(projects[2]),'目录未提供');
+});
+
+test('recent saved modifications sort ahead of unknown dates; role and search filters compose without changing source order',()=>{
+ const projects=[
+  {id:'unknown',name:'A',lastOpenedAt:'2026-11-18T10:00:00Z',toolchain:[{role:'PLC'}]},
+  {id:'older',name:'Z',modifiedAt:'2026-11-17T01:00:00Z',toolchain:[{role:'HMI'}]},
+  {id:'newer',name:'B',modifiedAt:'2026-11-18T01:00:00Z',toolchain:[{role:'PLC'},{role:'HMI'},{role:'场景'}]},
+  {id:'invalid',name:'C',modifiedAt:'not-a-date',toolchain:[]},
+ ];
+ assert.deepEqual(filterProjects(projects,'').map(p=>p.id),['newer','older','unknown','invalid']);
+ assert.deepEqual(filterProjects(projects,'',{sort:'name'}).map(p=>p.id),['unknown','newer','invalid','older']);
+ assert.deepEqual(filterProjects(projects,'',{tool:'hmi'}).map(p=>p.id),['newer','older']);
+ assert.deepEqual(filterProjects(projects,'B',{tool:'scene'}).map(p=>p.id),['newer']);
+ assert.deepEqual(filterProjects(projects,'A',{tool:'scene'}),[]);
+ assert.deepEqual(projects.map(p=>p.id),['unknown','older','newer','invalid']);
+ assert.equal(projectModifiedTime(projects[0]),null);assert.equal(projectModifiedTime(projects[3]),null);assert.equal(projectModifiedLabel(projects[0]),'修改时间未提供');
+ assert.match(projectModifiedLabel(projects[2]),/2026\/11\/18 09:00/);
+});
+
+test('equal modification dates keep deterministic name/id ordering without pinning the selected project',()=>{
+ const projects=[{id:'b',name:'同名',modifiedAt:'2026-11-18T00:00:00Z'},{id:'a',name:'同名',modifiedAt:'2026-11-18T00:00:00Z'}];
+ assert.deepEqual(filterProjects(projects,'').map(p=>p.id),['a','b']);
+ assert.deepEqual(filterProjects(projects.slice().reverse(),'').map(p=>p.id),['a','b']);
 });
 
 test('project cards paginate, search by path and selection alone invokes the requested action',async()=>{

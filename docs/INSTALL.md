@@ -1,6 +1,6 @@
 # 安装与接入
 
-0.5.9 是 Windows 源码开发预览，维护者基线为 Node 25、Python 3.13、日常 DSH 0.2.2。完整干净电脑安装尚未验收；不要把通过源码测试理解为所有原生工具已可运行。
+0.5.10 是 Windows 源码开发预览，维护者基线为 Node 25、Python 3.13、日常 DSH 0.2.2。完整干净电脑安装尚未验收；不要把通过源码测试理解为所有原生工具已可运行。
 
 ## 构建与状态目录
 
@@ -19,7 +19,11 @@
 | OIP | [中文补丁与说明](https://github.com/HellsegaMIMIC/open-industry-project-zh/releases/tag/v2026.11.17-preview.1) | DSH 原生编辑桥接目前要求官方 2026.11.9 的精确文件指纹；独立中文补丁修改主进程后，不能直接作为该桥接输入 |
 | OpenPLC Runtime | [官方 Runtime](https://github.com/Autonomy-Logic/openplc-runtime) | 本机已核查基线 v4.3.0；Runtime 与 Windows MSYS 编译环境需另行安装并配置 |
 
-DSH 的“工具下载与安装”显示同一组入口和只读检测结果。找到入口只说明文件存在；下载、安装、版本兼容和实际运行是不同步骤。
+DSH 工程选择页的“工具下载与安装”和“工程设置 → 工具配置与下载”显示同一组紧凑格子及只读检测结果。OpenPLC、FUXA、OIP 各占一组，Runtime 与编译依赖合并为一组，分别显示是否找到；版本、路径和缺项在详情中查看。手动工程配置保留在默认折叠的“高级配置”。找到入口只说明文件存在；下载、安装、版本兼容和实际运行是不同步骤。
+
+可以选择全部或指定工具，点击“复制安装提示词”，再粘贴到 DSH 对话。提示词要求先检查现有配置、补齐缺项、核对适配版本及源码依赖，并保全已有工程和安装。选择 Runtime 会同时包含 Runtime 和编译依赖。复制不自动发送消息或执行安装，完整新电脑安装仍须单独验证。
+
+Windows 的 `tools.runtime` 指向包含 `VERSION`、`core`、`scripts` 的 `openplc-runtime` 根目录，`tools.msys` 指向匹配 Runtime 的 `msys64` 根目录；它们不是同一个路径。检测核对 Runtime 构建入口及 MSYS 的 `bash.exe`、`g++.exe`、`cmake.exe`、`make.exe`，不会执行这些程序。Runtime 官方发行及其要求是来源依据，本插件不提供另一个已验收的独立“PLC 编译环境”安装包。
 
 OpenPLC 源码依赖及准确公开提交见 [EDITOR-DEPENDENCY.md](EDITOR-DEPENDENCY.md)。OIP 原版安装及内置部件不随插件仓库分发；不会仅靠 host/catalog 文件就获得原生编辑能力。可选教学数值模型和商业 Factory I/O 场景也未包含。
 
