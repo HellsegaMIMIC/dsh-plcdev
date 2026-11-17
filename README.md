@@ -9,11 +9,12 @@
 PLCdev 是 DeepSeek Harness（DSH）的开源工程插件，面向 PLC 学习、教学演示和本机开发。你用自然语言提出需求，插件整理各工具的修改结果；你可以查看变化、打开原生工具检查，再决定保留或撤销本轮修改。
 
 [![Source checks](https://github.com/HellsegaMIMIC/dsh-plcdev/actions/workflows/source-checks.yml/badge.svg)](https://github.com/HellsegaMIMIC/dsh-plcdev/actions/workflows/source-checks.yml)
-[![Version](https://img.shields.io/badge/version-0.5.10_preview-7250B8)](https://github.com/HellsegaMIMIC/dsh-plcdev/releases/tag/v0.5.10-preview.1)
+[![Version](https://img.shields.io/badge/version-0.5.11_preview-7250B8)](https://github.com/HellsegaMIMIC/dsh-plcdev/releases/tag/v0.5.11-preview.1)
 [![Platform](https://img.shields.io/badge/platform-Windows-4F5D75)](docs/INSTALL.md)
-[![License](https://img.shields.io/badge/license-GPL--3.0--only-4F5D75)](LICENSE)
+[![Original code: MIT](https://img.shields.io/badge/original_code-MIT-4F5D75)](LICENSE)
+[![Combined distribution: GPL-3.0-only](https://img.shields.io/badge/combined_distribution-GPL--3.0--only-4F5D75)](LICENSE-CHOICE.md)
 
-[下载预览版](https://github.com/HellsegaMIMIC/dsh-plcdev/releases/tag/v0.5.10-preview.1) · [安装与接入](docs/INSTALL.md) · [功能边界](docs/STATUS.md) · [更新记录](CHANGELOG.md) · [反馈问题](https://github.com/HellsegaMIMIC/dsh-plcdev/issues)
+**[版本发布与下载（Releases）](https://github.com/HellsegaMIMIC/dsh-plcdev/releases)** · [当前预览版](https://github.com/HellsegaMIMIC/dsh-plcdev/releases/tag/v0.5.11-preview.1) · [版本目录](RELEASES.md) · [安装与接入](docs/INSTALL.md) · [更新记录](CHANGELOG.md) · [反馈问题](https://github.com/HellsegaMIMIC/dsh-plcdev/issues)
 
 > 当前为 **Windows 开发预览**。维护者已验证特定环境下的三工具编辑、查看、保留与撤销闭环；新电脑完整安装和最新版本真实 Runtime 联调仍需分别验证。
 
@@ -59,7 +60,7 @@ PLCdev 是 DeepSeek Harness（DSH）的开源工程插件，面向 PLC 学习、
 
 ### 试用插件
 
-到 [v0.5.10-preview.1](https://github.com/HellsegaMIMIC/dsh-plcdev/releases/tag/v0.5.10-preview.1) 下载源码 ZIP 与插件 TGZ，按[安装说明](docs/INSTALL.md)准备本机工程服务并接入 DSH。
+到 [v0.5.11-preview.1](https://github.com/HellsegaMIMIC/dsh-plcdev/releases/tag/v0.5.11-preview.1) 下载源码 ZIP 与插件 TGZ，按[安装说明](docs/INSTALL.md)准备本机工程服务并接入 DSH。历史版本、每版更新说明和校验文件集中在 [Releases](https://github.com/HellsegaMIMIC/dsh-plcdev/releases)。
 
 插件 TGZ 包含插件界面与代码，工程服务需要匹配的源码树；DSH、原生编辑工具及 Runtime 分别安装。仅安装编辑器 EXE 不足以提供所有工程服务。当前 OIP 适配有固定版本与本机目录约束，试用前请核对安装说明。
 
@@ -105,7 +106,7 @@ docs/                  安装、架构、隐私与验收边界
 | 工程筛选、资源状态、修改记录与梯形图差异 | 原生手工草稿自动回收、历史保存版本回滚 |
 | 运行关系、变量与结构化事件界面 | 最新构建的完整 Runtime 故障恢复、实时性与硬件 |
 
-EEZ Studio 的统一候选适配仍在开发，未包含在 0.5.10 发行中。详细证据范围见[开发状态](docs/STATUS.md)。本项目面向学习与开发，软件停止、HMI、网络和本项目均不得作为人员安全功能。
+EEZ Studio 的统一候选适配仍在开发，未包含在本次发行中。详细证据范围见[开发状态](docs/STATUS.md)。本项目面向学习与开发，软件停止、HMI、网络和本项目均不得作为人员安全功能。
 
 ## 参与项目
 
@@ -113,4 +114,6 @@ EEZ Studio 的统一候选适配仍在开发，未包含在 0.5.10 发行中。�
 
 [贡献指南](CONTRIBUTING.md) · [隐私说明](docs/PRIVACY.md) · [安全问题](SECURITY.md) · [第三方来源](THIRD_PARTY_NOTICES.md)
 
-原创部分采用 **GPL-3.0-only**。DSH、OpenPLC、FUXA、OIP 及其他第三方代码和产品标志保留原许可与权利；本项目是社区集成，不代表官方背书。
+**原创代码采用 MIT；包含 OpenPLC GPL 派生代码的组合插件继续按 GPL-3.0-only 分发。** 两者都是开源许可，整包不能作为纯 MIT 使用。详见 [MIT 许可](LICENSE)与[许可范围](LICENSE-CHOICE.md)。
+
+DSH、OpenPLC、FUXA、OIP 及其他第三方代码和产品标志保留原许可与权利；本项目是社区集成，不代表官方背书。旧发行标签与安装包保留原许可记录。

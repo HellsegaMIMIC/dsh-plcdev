@@ -1,5 +1,7 @@
 # OpenPLC 只读梯形图差异适配
 
+许可边界（2026-11-18）：本项目新增的 MIT 原创授权不改变 OpenPLC 来源代码及其派生产物的许可。`generated.cjs`、`generated-css.mjs` 保留 GPL 及其中各依赖声明；包含这些内容的组合插件继续 GPL-3.0-only 分发。维护者有权授权的独立原创胶合代码按插件目录的 `LICENSE-MIT.txt` 提供；对上游代码的修改及派生部分仍按其原许可。具体来源和字节指纹继续以 `provenance.json` 为准。
+
 正式 DSH 的 `NativeLadderPreview` 从归属及摘要已核对的 `conversations/preview` 接口接收实际 `.ld` 文本。此目录复用 OpenPLC `GraphicalDiffViewer`、`computeGraphicalDiff`、ReactFlow 和原生图形原子，不包含 demo 配置生成器，也没有磁盘、IPC、编辑器 store 或 Runtime 能力。
 
 普通插件构建直接使用 `generated.cjs` 和 `generated-css.mjs`，不要求安装 OpenPLC 源码。维护者需要刷新上游适配时，在完整 PLCdev 工作区执行：

@@ -1,5 +1,8 @@
 DSH PLCdev Workbench
-Copyright (C) 2026 dsh-plcdev contributors
+Copyright (c) 2026 dsh-plcdev contributors
 
-Original project code is licensed under GPL-3.0-only.
-Third-party portions retain their original notices and licenses; see THIRD_PARTY_NOTICES.md and LICENSES/.
+Original code that the maintainers have authority to license is MIT-licensed; see LICENSE and LICENSES/MIT-original.txt. This grant excludes third-party code, assets and third-party-derived portions.
+
+The combined plugin includes OpenPLC-derived GPL rendering code and remains GPL-3.0-only; see LICENSES/GPL-3.0.txt and software/dsh-plcdev/LICENSE. Preserve the MIT notice when redistributing that combination.
+
+LICENSE-CHOICE.md defines the scope. Third-party portions retain their original notices and licenses; see THIRD_PARTY_NOTICES.md and docs/ASSET-PROVENANCE.md. Existing release archives and tags retain their original license records.

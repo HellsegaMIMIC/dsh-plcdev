@@ -1,0 +1,23 @@
+DSH PLCdev Workbench
+Copyright (c) 2026 dsh-plcdev contributors
+
+Original code that the maintainers have authority to license is available
+under the MIT License in LICENSE-MIT.txt, effective 2026-11-18. This grant
+does not relicense third-party code, assets, or third-party-derived portions.
+
+The distributed plugin combines original code with OpenPLC Editor-derived
+ladder rendering code. This combined distribution remains GPL-3.0-only;
+LICENSE contains its GPL terms. package.json's license field describes that
+combined distribution, not the separate MIT grant for original code.
+
+In particular, src/client/native-ladder/generated.cjs and generated-css.mjs
+contain upstream-derived material and are not covered by the original-code
+MIT grant. Embedded tool logos and other third-party portions retain their
+own notices and licenses, including notices in the generated bundle.
+
+Source, build provenance and full scope:
+https://github.com/HellsegaMIMIC/dsh-plcdev/blob/main/LICENSE-CHOICE.md
+https://github.com/HellsegaMIMIC/dsh-plcdev/blob/main/THIRD_PARTY_NOTICES.md
+
+The MIT grant does not revoke rights previously granted under GPL. Existing
+release archives and tags retain their original license records.

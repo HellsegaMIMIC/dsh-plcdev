@@ -54,7 +54,9 @@
     "software/native-preview-banner.js",
     "software/native-preview-client.cjs",
     "software/dsh-plcdev/src/client/native-ladder/README.md",
-    "software/dsh-plcdev/tests/fixtures/native-ladder.ld"
+    "software/dsh-plcdev/tests/fixtures/native-ladder.ld",
+    "software/dsh-plcdev/LICENSE-MIT.txt",
+    "software/dsh-plcdev/NOTICE"
   ],
   "runtimeSourceDirectories": [],
   "allowedSuffixes": [
@@ -115,5 +117,7 @@
     "software/fuxa-oip/batch_adapter.py",
     "software/factoryio/modbus_mock.py"
   ],
-  "exampleProjectsIncluded": false
+  "exampleProjectsIncluded": false,
+  "originalCodeLicense": "MIT",
+  "distributionLicense": "GPL-3.0-only"
 }

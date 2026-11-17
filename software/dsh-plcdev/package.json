@@ -1,6 +1,6 @@
 {
   "name": "dsh-plcdev",
-  "version": "0.5.10",
+  "version": "0.5.11",
   "private": true,
   "type": "module",
   "description": "PLCdev project and candidate workbench for DeepSeek Harness",
@@ -12,7 +12,9 @@
     "src/*.mjs",
     "lib",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "LICENSE-MIT.txt",
+    "NOTICE"
   ],
   "scripts": {
     "build": "node build.mjs",
@@ -44,5 +46,10 @@
       ]
     }
   },
-  "license": "GPL-3.0-only"
+  "license": "GPL-3.0-only",
+  "plcdevLicensing": {
+    "originalCode": "MIT",
+    "distribution": "GPL-3.0-only",
+    "scope": "NOTICE"
+  }
 }

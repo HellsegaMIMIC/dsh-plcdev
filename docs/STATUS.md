@@ -1,6 +1,6 @@
 # 开发状态与验收范围
 
-源码 0.5.10，Windows 开发预览。当前公开包的具体测试数量与构建身份以 `validation.json` 和 `SOURCE-MANIFEST.json` 为准，不累计不同阶段的重叠测试。
+源码 0.5.11，Windows 开发预览。当前公开包的具体测试数量与构建身份以 `validation.json` 和 `SOURCE-MANIFEST.json` 为准，不累计不同阶段的重叠测试。
 
 | 能力 | 已有实现与证据 | 边界 |
 | --- | --- | --- |
