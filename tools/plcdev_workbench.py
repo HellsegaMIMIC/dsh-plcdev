@@ -1,6 +1,6 @@
 """PLCdev workbench: project-scoped views and commands, explicit session ownership."""
 from __future__ import annotations
-import argparse, json, os, secrets, socket, subprocess, sys, threading, time
+import argparse, json, os, re, secrets, socket, subprocess, sys, threading, time
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
@@ -234,7 +234,8 @@ class Manager:
 
     def event(self, text):
         with self.lock:
-            self.message=text;self.events.append({'at':time.time(),'message':text});self.events=self.events[-60:]
+            self.message=text;self.events.append({'at':time.time(),'message':text,'projectId':self.project['id'],
+                'sessionId':(self.manifest or {}).get('sessionId'),'programHash':(self.manifest or {}).get('programHash'),'phase':self.phase});self.events=self.events[-60:]
             store(HOME/'events.json',self.events)
 
     def dependencies(self):
@@ -435,6 +436,7 @@ class Workspace:
             self.managers={key:self.make_manager(item) for key,item in self.projects.items()}
         else:self.managers=managers
         self._catalog_stamp=None;self._catalog_refresh_error=None
+        self.previous_managers={};self.resource_preview_managers=[];self._saved_version_sync={}
 
     def _sync_new_projects(self):
         """Notice registrations from the task service without retargeting live owners."""
@@ -449,13 +451,18 @@ class Workspace:
             if stamp==self._catalog_stamp:return
             try:
                 projects=self.catalog.refresh()
-                with self.lock:
-                    for key,project in projects.items():
-                        # A disk refresh is not permission to replace an existing
-                        # definition, dispose a manager, or end its Runtime.
-                        if key in self.projects or key in self.managers:continue
-                        manager=self.make_manager(project)
+                for key,project in projects.items():
+                    # A disk refresh is not permission to replace arbitrary
+                    # definitions, dispose a manager, or end its Runtime.
+                    if key in self.projects or key in self.managers:
+                        try:self._refresh_saved_project(project)
+                        except (OSError,ValueError,RuntimeError) as exc:
+                            self._saved_version_sync[key]={'state':'blocked','message':str(exc)}
+                        continue
+                    manager=self.make_manager(project)
+                    with self.lock:
                         self.projects[key]=project;self.managers[key]=manager
+                        if self.default is None:self.default=key
                 self._catalog_refresh_error=None
             except (OSError,ValueError) as exc:
                 self._catalog_refresh_error=str(exc)
@@ -476,7 +483,7 @@ class Workspace:
         if project['kind']=='user' and project.get('modelBindingsPath'):
             from workbench_model import ModelLocalManager
             return ModelLocalManager(self.instance,project)
-        if project['kind']=='user' and project.get('defaultMode')=='fuxa-local':
+        if project['kind']=='user' and (project.get('defaultMode')=='fuxa-local' or project.get('interfacePath') or project.get('scene')):
             from workbench_interface import FuxaLocalManager
             return FuxaLocalManager(self.instance,project)
         if project['kind']=='user':
@@ -489,9 +496,112 @@ class Workspace:
             raise ValueError('工程不存在；请选择工程后重试')
         return self.managers[project_id]
 
+    def _refresh_saved_project(self, project):
+        """Adopt only an authenticated on-disk publication, preserving old tools.
+
+        The publication receipt plus full snapshot prove the new references;
+        arbitrary catalog edits still cannot retarget an existing manager.
+        Runtime and controller action leases protect the ownership handover.
+        """
+        key=project['id'];previous=self.resolve(key);old=self.projects[key]
+        if project==old:return previous
+        application=(project.get('application') or {}).get('path','').replace('\\','/')
+        version=re.match(r'^\.plcdev/versions/(v[0-9]{6}-[0-9a-f]{12})/content/',application)
+        if not version or application==(old.get('application') or {}).get('path','').replace('\\','/'):
+            return previous
+        from workbench_project_config import plain,read_json
+        from workbench_projects import read_user_project
+        from workbench_agent_adapters import _snapshot
+        manifest=Path(project['manifestPath']);root=Path(project['projectRoot'])
+        if manifest.resolve()!=Path(old['manifestPath']).resolve():raise ValueError('保存版本的工程位置不一致，未更换工具归属。')
+        directory=root/'.plcdev/versions'/version.group(1);plain(directory,root)
+        publication=read_json(directory/'publication.json');result=publication.get('result') or {}
+        if (publication.get('state')!='confirmed' or result.get('completionScope')!='saved-project-version'
+                or result.get('projectId')!=key or result.get('keptProjectId')!=key
+                or result.get('authoritativeSourceModified') is not True
+                or Path(result.get('manifestPath','')).resolve()!=manifest.resolve()
+                or Path(result.get('versionDirectory','')).resolve()!=directory.resolve()):
+            raise ValueError('工程版本尚未确认保存，保留原工具窗口。')
+        with self.action_lock,FileLease(RUNTIME_LOCK):
+            state=previous.snapshot()
+            if self.occupied(state):raise ValueError('原版本仍有运行会话，未更换其归属；请先结束运行。')
+            snapshot=_snapshot(read_user_project(manifest))
+            if snapshot['projectRevision']!=result.get('revision') or snapshot['files']!=result.get('files'):
+                raise ValueError('保存版本内容已改变，未把旧窗口标记为已同步。')
+            current=self.make_manager(project)
+            with self.lock:
+                if self.managers[key] is not previous:raise ValueError('工程管理器已更新，请刷新后再试。')
+                self.previous_managers.setdefault(key,[]).append(previous)
+                self.managers[key]=current;self.projects[key]=project
+                self._saved_version_sync[key]={'state':'saved','version':result['version'],
+                    'message':'工程已保存；工具载入新版本后才能确认同步。'}
+            if hasattr(current,'adopt_oip'):current.adopt_oip(previous)
+            return current
+
+    def resolve_current(self, project_id):
+        self._sync_new_projects()
+        current=self.resolve(project_id);project=self.projects[project_id]
+        if project.get('kind')!='user':return current
+        from workbench_projects import read_user_project
+        fresh=read_user_project(project['manifestPath'])
+        return self._refresh_saved_project(fresh)
+
+    def editor_project(self, project_id):
+        """Resolve current saved paths independently of a prior native window."""
+        self._sync_new_projects();project=self.projects[project_id]
+        if project.get('kind')!='user':return project
+        from workbench_projects import read_user_project
+        return read_user_project(project['manifestPath'])
+
+    def preview_project(self, project_id):
+        """Read the registered saved identity without refreshing tool managers."""
+        from workbench_projects import read_user_project
+        if self.catalog is not None:
+            entry=next((item for item in self.catalog._entries() if item['id']==project_id),None)
+            if entry is None:raise ValueError('预览所属工程已不在登记列表中。')
+            project=read_user_project(entry['manifestPath'])
+        else:
+            registered=self.projects.get(project_id)
+            if not registered:raise ValueError('预览所属工程未登记。')
+            project=read_user_project(registered['manifestPath'])
+        if project['id']!=project_id:raise ValueError('工程标识与登记位置不一致。')
+        return project
+
+    def open_result_resource(self, project, tool, preview):
+        if tool not in ('fuxa','oip'):raise ValueError('工具类型无效。')
+        if preview:
+            target=self.make_manager(project)
+            with self.lock:self.resource_preview_managers.append(target)
+        else:
+            target=self.resolve_current(project['id'])
+            for field in ('manifestPath','plc','hmi','scene'):
+                expected,actual=project.get(field),target.project.get(field)
+                if bool(expected)!=bool(actual) or expected and Path(expected).resolve()!=Path(actual).resolve():
+                    raise ValueError('工程版本已改变，未打开另一份工具资源。')
+        operation=getattr(target,'open_fuxa' if tool=='fuxa' else 'open_oip',None)
+        if operation is None:raise ValueError('此工程不支持该工具入口。')
+        operation()
+        if tool=='oip' and hasattr(target,'oip_sync'):
+            return {'toolSync':{'oip':target.oip_sync(refresh=False)}}
+        item=getattr(target,'tools',{}).get(tool,{})
+        if item.get('verified') is not True or item.get('recoveryOnly'):
+            raise ValueError('工具已打开，但工程内容尚未确认载入；保留窗口供核对。')
+
     @staticmethod
     def occupied(snapshot):
         return bool(snapshot.get('session',{}).get('active') or snapshot.get('phase') in ('building','stopping'))
+
+    def observe_result_resource(self, project, tool, preview):
+        with self.lock:
+            choices = list(self.resource_preview_managers) if preview else list(self.managers.values())
+        target = next((item for item in choices if item.project['id'] == project['id'] and
+            all(bool(item.project.get(key)) == bool(project.get(key)) and
+                (not project.get(key) or Path(item.project[key]).resolve() == Path(project[key]).resolve())
+                for key in ('manifestPath','scene'))), None)
+        if tool != 'oip': raise ValueError('此工具不支持窗口状态查询。')
+        sync = target.oip_sync() if target is not None and hasattr(target,'oip_sync') else {
+            'state':'not_open','message':'该次 OIP 预览窗口已关闭或后台已重启。'}
+        return {'toolSync': {'oip': sync}}
 
     @classmethod
     def definition_locked(cls,snapshot):
@@ -503,14 +613,47 @@ class Workspace:
 
     def snapshot(self, project_id=None):
         self._sync_new_projects()
+        # The catalog remains usable before the first real project exists.
+        # This identity has no manager, source tree, tasks or Runtime actions.
+        if not self.projects and project_id in (None, 'catalog'):
+            return {'service':'plcdev-workbench','schemaVersion':3,'instance':self.instance,
+                'agentTaskInputVersion':'saved-revision-v1','projectInspectionVersion':1,'runtimeEventsVersion':1,
+                'catalogOnly':True,'project':{'id':'catalog','kind':'catalog','name':'工程目录','opened':False},
+                'projects':[],'session':{'id':None,'projectId':'catalog','active':False},
+                'phase':'idle','capabilities':{},'otherSessions':[],
+                'projectCatalog':{'canCreate':self.catalog is not None,'canOpen':self.catalog is not None,
+                    'canConfigure':False,'canConfigureInterface':self.catalog is not None,
+                    'defaultParent':str(Path.home()/'Documents'/'PLCdev Projects'),
+                    'refreshError':self._catalog_refresh_error,
+                    'unavailable':list(getattr(self.catalog,'unavailable',[])) if self.catalog else []}}
         project_id=self.default if project_id is None else project_id
         self.resolve(project_id)
         states=self.snapshots();selected=states[project_id]
         selected['schemaVersion']=3
         selected['agentTaskInputVersion']='saved-revision-v1'
+        selected['projectInspectionVersion']=1
+        selected['runtimeEventsVersion']=1
         selected['project']={**self.projects[project_id],**selected.get('project',{}),'id':project_id,'opened':True}
+        if project_id in self._saved_version_sync:selected['savedVersionSync']=dict(self._saved_version_sync[project_id])
+        selected['previousToolWindows']=[{'projectId':project_id,'plc':old.project.get('plc'),
+            'toolsOpen':bool(old.snapshot().get('toolsOpen')),'state':'previous-version'}
+            for old in self.previous_managers.get(project_id,[])]
         with self.lock:projects=list(self.projects.values())
-        selected['projects']=[{k:item.get(k) for k in ('id','name','description','kind','defaultMode','manifestPath')} for item in projects]
+        def catalog_item(item):
+            result={k:item.get(k) for k in ('id','name','description','kind','defaultMode','manifestPath')}
+            mode=item.get('defaultMode')
+            tools=[]
+            if item.get('plc'):tools.append(dict(role='PLC',name='OpenPLC'))
+            if item.get('hmi'):
+                tools.append(dict(role='HMI',name='FUXA' if mode in ('fuxa-oip','fuxa-local') else 'EEZ Studio' if mode in ('factoryio','local') else None))
+            if item.get('scene'):
+                tools.append(dict(role='场景',name='OIP' if mode=='fuxa-oip' else 'Factory I/O' if mode=='factoryio' else None))
+            result['toolchain']=tools
+            state=states.get(item.get('id'),{})
+            if state.get('session',{}).get('active'):
+                result['runtimeStatus']=(state.get('state') or {}).get('runtimeState') or 'unknown' if state.get('observerFresh') is True else 'unknown'
+            return result
+        selected['projects']=[catalog_item(item) for item in projects]
         selected['projectCatalog']=dict(canCreate=self.catalog is not None,canOpen=self.catalog is not None,
             defaultParent=str(Path.home()/'Documents'/'PLCdev Projects'),
             refreshError=self._catalog_refresh_error,
@@ -522,6 +665,7 @@ class Workspace:
         locked=self.definition_locked(selected) or configuration_busy
         selected['capabilities']['canConfigureProject']=self.catalog is not None and self.projects[project_id]['kind']=='user' and not locked
         selected['capabilities']['canConfigureInterface']=self.catalog is not None and self.projects[project_id]['kind']=='user' and self.projects[project_id].get('defaultMode')!='fuxa-oip' and not locked
+        selected['capabilities']['canConfigureOip']=bool(self.catalog is not None and self.projects[project_id]['kind']=='user' and self.projects[project_id].get('defaultMode')!='fuxa-oip' and self.projects[project_id].get('simulation',{}).get('provider')!='local-model' and not locked)
         if locked:selected['capabilities'].setdefault('reasons',{})['canConfigureProject']='本工程工具或运行会话已打开，或配置正在保存；请完成后再修改。'
         if locked:selected['capabilities'].setdefault('reasons',{})['canConfigureInterface']='本工程工具或运行会话已打开，或配置正在保存；请完成后再修改。'
         if configuration_busy:
@@ -557,10 +701,11 @@ class Workspace:
             expiry=body.get('expires',0)
             if type(expiry) not in (int,float) or not time.time()<=expiry<=time.time()+15:
                 raise ValueError('工程操作请求已过期，未执行')
-            current=self.resolve(body.get('projectId')).snapshot()
+            catalog_only=not self.projects and body.get('projectId')=='catalog' and body.get('action') in ('project-create','project-open')
+            current={'session':{'id':None}} if catalog_only else self.resolve(body.get('projectId')).snapshot()
             if 'sessionId' not in body or body.get('sessionId')!=current.get('session',{}).get('id'):
                 raise ValueError('当前工程会话已更换，请刷新后重新操作')
-            if body['action'] in ('project-configure','project-interface-configure'):
+            if body['action'] in ('project-configure','project-interface-configure','project-oip-configure'):
                 key=body['projectId']
                 with self.action_lock:
                     current=self.resolve(key).snapshot()
@@ -572,7 +717,9 @@ class Workspace:
                         raise ValueError('工程配置已改变，请刷新后重试。')
                     self.configuring.add(key)
                 try:
-                    if body['action']=='project-interface-configure':
+                    if body['action']=='project-oip-configure':
+                        project=self.catalog.configure_oip(key,body.get('source'))
+                    elif body['action']=='project-interface-configure':
                         if self.projects[key].get('defaultMode')=='fuxa-oip':raise ValueError('已有批次协议工程保留原绑定；请新建本机工程声明接口。')
                         project=self.catalog.configure_interface(key,body.get('definition'),hmi_source=body.get('hmiSource') or None)
                     else:
@@ -582,7 +729,7 @@ class Workspace:
                 finally:
                     with self.action_lock:self.configuring.discard(key)
             if body['action']=='project-create':
-                project=self.catalog.create(body.get('name'),body.get('parent'),body.get('language','ld'),
+                project=self.catalog.create(body.get('name'),body.get('parent'),body.get('language','st'),
                     body.get('simulation','none'),source=body.get('source'))
             else:
                 # Opening another project is a view/file operation. Only a
@@ -604,10 +751,11 @@ class Workspace:
                 if self.projects[key]!=project:raise ValueError('工程正在运行，不能更换其定义')
             else:self.managers[key]=self.make_manager(project)
             self.projects[key]=project
+            if self.default is None:self.default=key
         return dict(ok=True,projectId=key,project=project)
 
     def action(self, body):
-        if body.get('action') in ('project-create','project-open','project-configure','project-interface-configure'):
+        if body.get('action') in ('project-create','project-open','project-configure','project-interface-configure','project-oip-configure'):
             return self.project_action(body)
         with self.action_lock:
             expiry=body.get('expires',0)
@@ -641,6 +789,113 @@ class AgentGatewayError(RuntimeError):
         self.status = status
 
 
+def agent_task_receipt(manager, project_id, request_id):
+    """Read one service receipt without creating, retrying or guessing outcome."""
+    if not isinstance(project_id,str) or not re.fullmatch(r'user-[0-9a-f]{32}',project_id) or not isinstance(request_id,str) or not re.fullmatch(r'dsh2-[0-9a-f]{64}',request_id):
+        raise AgentGatewayError('回执身份无效。',400)
+    try:
+        manager.resolve(project_id)
+        from agent_task_service import ensure, service_call
+        result=service_call(ensure(),'/v1/receipt?projectId='+parse.quote(project_id,safe='')+'&clientRequestId='+parse.quote(request_id,safe=''))
+        task=result.get('task')
+        if result.get('projectId')!=project_id or result.get('clientRequestId')!=request_id or (task is not None and (not isinstance(task,dict) or task.get('projectId')!=project_id or not re.fullmatch(r'task-[0-9a-f]{32}',str(task.get('taskId',''))))):
+            raise AgentGatewayError('任务回执归属未确认。',503)
+        return result
+    except AgentGatewayError:raise
+    except Exception:raise AgentGatewayError('任务回执暂不可核对；保留原请求，未重发。',503) from None
+
+
+def _running_task_service():
+    """Find and authenticate an existing service without starting or reconciling it."""
+    from agent_task_service import (_read, DESCRIPTOR, service_call, CONTRACT_VERSION,
+                                    WORKFLOW_VERSION, source_identity)
+    descriptor=_read(DESCRIPTOR)
+    if not isinstance(descriptor,dict):raise AgentGatewayError('任务服务未运行，保留回执暂不可核对。',503)
+    health=service_call(descriptor,'/v1/health')
+    if (not isinstance(health,dict) or health.get('service')!='plcdev-agent'
+        or health.get('instance')!=descriptor.get('instance') or health.get('contractVersion')!=CONTRACT_VERSION
+        or health.get('workflowVersion')!=WORKFLOW_VERSION or health.get('sourceIdentity')!=source_identity()):
+        raise AgentGatewayError('任务服务身份或版本无法核对，未查询回执。',503)
+    return descriptor
+
+
+def agent_review_receipt(manager, body, *, connect=None, call=None):
+    """Read an existing keep receipt only; do not dispatch, retry, or start a service."""
+    required={'projectId','taskId','candidateDigest','expectedRevision','action','clientRequestId'}
+    response={'ok','projectId','taskId','candidateDigest','clientRequestId','state','reasonCode','keptProjectId','manifestPath','revision'}
+    reasons={'operation_in_progress','receipt_unconfirmed','receipt_mismatch','copy_changed','index_unavailable','index_conflict','evidence_unavailable'}
+    if (not isinstance(body,dict) or set(body)!=required
+        or not isinstance(body.get('projectId'),str) or not re.fullmatch(r'user-[0-9a-f]{32}',body['projectId'])
+        or not isinstance(body.get('taskId'),str) or not re.fullmatch(r'task-[0-9a-f]{32}',body['taskId'])
+        or any(not isinstance(body.get(k),str) or not re.fullmatch(r'[0-9a-f]{64}',body[k]) for k in ('candidateDigest','expectedRevision'))
+        or body.get('action')!='keep' or not isinstance(body.get('clientRequestId'),str)
+        or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}',body['clientRequestId'])):
+        raise AgentGatewayError('保留回执请求身份无效。',400)
+    try:
+        manager.resolve(body['projectId'])
+        if connect is None:connect=_running_task_service
+        if call is None:
+            from agent_task_service import service_call
+            call=service_call
+        descriptor=connect()
+        result=call(descriptor,'/v1/tasks/'+body['taskId']+'/review-receipt',dict(body))
+        if descriptor!=connect():raise AgentGatewayError('任务服务已变化，保留回执未确认。',503)
+        if (not isinstance(result,dict) or set(result) not in (response,response|{'completionScope','version'}) or result.get('ok') is not True
+            or any(result.get(k)!=body[k] for k in ('projectId','taskId','candidateDigest','clientRequestId'))):
+            raise AgentGatewayError('保留回执归属未确认。',503)
+        if result['state']=='unknown':
+            valid=set(result)==response and result['reasonCode'] in reasons and all(result[k] is None for k in ('keptProjectId','manifestPath','revision'))
+        else:
+            manifest=result['manifestPath']
+            valid=(result['state'] in ('confirmed_registered','confirmed_unregistered') and result['reasonCode']=='none'
+                and isinstance(result['keptProjectId'],str) and re.fullmatch(r'user-[0-9a-f]{32}',result['keptProjectId'])
+                and isinstance(manifest,str) and len(manifest)<=4096 and os.path.isabs(manifest) and not re.search(r'[\x00-\x1f]',manifest)
+                and isinstance(result['revision'],str) and re.fullmatch(r'[0-9a-f]{64}',result['revision']))
+            if result['keptProjectId']==body['projectId']:
+                valid=valid and result.get('completionScope')=='saved-project-version' and type(result.get('version')) is int and result['version']>=2
+            else:valid=valid and set(result)==response
+        if not valid:raise AgentGatewayError('保留回执状态无法核对。',503)
+        return result
+    except AgentGatewayError:raise
+    except Exception:raise AgentGatewayError('保留回执暂不可核对；保留原请求编号，不会重发。',503) from None
+
+
+def agent_task_records(manager, project_id, *, current=False, connect=None, call=None):
+    """Read the ledger without planning inputs, tool scans or editor workers.
+
+    Records are display-only. The state variant adds a freshly hashed saved
+    revision; mutation handlers still independently enforce their own CAS.
+    """
+    manager.resolve(project_id)
+    try:
+        if connect is None or call is None:
+            from agent_task_service import ensure, service_call
+            connect, call = ensure, service_call
+        result = {'ok': True, 'projectId': project_id}
+        if current:
+            from workbench_agent_adapters import _snapshot, _manifest_project
+            project = _manifest_project(manager.projects[project_id])
+            result['projectRevision'] = _snapshot(project)['projectRevision']
+        listing = call(connect(), '/v1/tasks?projectId=' + parse.quote(project_id, safe=''))
+        tasks = listing.get('tasks')
+        if not isinstance(tasks, list) or any(not isinstance(t, dict) or t.get('projectId') != project_id for t in tasks):
+            raise AgentGatewayError('任务列表的工程归属无法核对。', 503)
+        # Keep receipt and review diagnostics, but never send model source
+        # catalogs for a history/status read. No fulfilled revision cache.
+        result['tasks'] = []
+        for task in tasks:
+            row = {k: v for k, v in task.items() if k not in ('editingInput', 'planningInput', 'planSubmission')}
+            if isinstance(row.get('candidate'), dict):
+                row['candidate'] = {k: v for k, v in row['candidate'].items()
+                                    if k not in ('editingInput', 'planningInput', 'planSubmission')}
+            result['tasks'].append(row)
+        return result
+    except AgentGatewayError:
+        raise
+    except Exception:
+        raise AgentGatewayError('调整记录暂不可读取，请稍后重试。', 503) from None
+
+
 def agent_tasks(manager, project_id, body=None, *, connect=None, call=None):
     """Proxy the independent task service without exposing its local capability.
 
@@ -672,7 +927,7 @@ def agent_tasks(manager, project_id, body=None, *, connect=None, call=None):
             if any(not isinstance(task, dict) or task.get('projectId') != project_id for task in listing['tasks']):
                 raise AgentGatewayError('任务服务返回了其他工程的任务，已拒绝显示。', 503)
             return {'ok':True, 'projectId':project_id, 'projectRevision':revision,
-                    'tasks':listing['tasks'], 'capabilities':inspection.get('capabilities', {}), 'planningInput':inspection.get('planningInput')}
+                    'tasks':listing['tasks'], 'capabilities':inspection.get('capabilities', {}), 'planningInput':inspection.get('planningInput'), 'editingInput':inspection.get('editingInput'), 'hmiViews':inspection.get('hmiViews', []), 'hmiTextTargets':inspection.get('hmiTextTargets', []), 'hmiValueTargets':inspection.get('hmiValueTargets', [])}
         required={'projectId','request','expectedRevision','executionScope','clientRequestId'}
         if not required.issubset(body) or set(body)-required-{'sourceBasis','workflow','revisionParent','planSubmission'} or body.get('sourceBasis','editor_current') not in ('editor_current','saved_revision') or body.get('projectId') != project_id or body.get('executionScope') != 'proposal':
             raise AgentGatewayError('无效的候选任务请求。', 400)
@@ -763,6 +1018,31 @@ def serve():
     HOME.mkdir(parents=True,exist_ok=True)
     with FileLease(HOME/'controller.lock'):
         token=secrets.token_urlsafe(32);instance=secrets.token_hex(16);manager=Workspace(instance)
+        from workbench_editor_link import EditorLinks
+        def editor_project(project_id):
+            return manager.editor_project(project_id)
+        def editor_task_call(path, body=None):
+            from agent_task_service import ensure, service_call
+            return service_call(ensure(),path,body)
+        from agent_task_service import source_identity as task_source_identity
+        preview_task_identity=task_source_identity()
+        def editor_preview_task_call(path, body=None):
+            # Lifecycle polling is read-only: it neither takes the startup
+            # lease nor starts a missing service. The running service must
+            # match the implementation this controller loaded.
+            from agent_task_service import DESCRIPTOR, CONTRACT_VERSION, WORKFLOW_VERSION, service_call
+            if body is not None or not re.fullmatch(r'/v1/tasks/task-[0-9a-f]{32}',path):
+                raise ValueError('预览只允许读取已登记任务。')
+            descriptor=read(DESCRIPTOR,{})
+            health=service_call(descriptor,'/v1/health')
+            if (health.get('instance')!=descriptor.get('instance') or health.get('contractVersion')!=CONTRACT_VERSION
+                    or health.get('workflowVersion')!=WORKFLOW_VERSION or health.get('sourceIdentity')!=preview_task_identity):
+                raise ValueError('预览所属任务服务身份或版本尚未确认。')
+            return service_call(descriptor,path)
+        editor_links=EditorLinks(HOME/'editor-links',editor_project,editor_task_call,EDITOR,environ=env,
+                                 resource_opener=manager.open_result_resource,preview_resolver=manager.preview_project,
+                                 preview_task_call=editor_preview_task_call)
+        editor_links.resource_observer=manager.observe_result_resource
         class Handler(BaseHTTPRequestHandler):
             def log_message(self,*args):pass
             def reply(self,code,body,content='application/json; charset=utf-8'):
@@ -790,11 +1070,48 @@ def serve():
                 if asset_path=='/api/agent/model/status':
                     from workbench_agent_model import status
                     self.reply(200,status())
-                elif asset_path=='/api/agent/tasks':
+                elif asset_path=='/api/agent/receipt':
+                    try:
+                        query=parse.parse_qs(parse.urlsplit(self.path).query,keep_blank_values=True)
+                        if set(query)!={'project','request'} or any(len(query[k])!=1 for k in query):raise AgentGatewayError('回执查询无效。',400)
+                        self.reply(200,agent_task_receipt(manager,query['project'][0],query['request'][0]))
+                    except AgentGatewayError as exc:self.reply(exc.status,{'ok':False,'error':str(exc)})
+                elif asset_path=='/api/runtime-events':
+                    try:
+                        query=parse.parse_qs(parse.urlsplit(self.path).query,keep_blank_values=True)
+                        if set(query)!={'project'} or len(query['project'])!=1:raise ValueError('工程查询无效。')
+                        from workbench_runtime_events import runtime_events
+                        self.reply(200,runtime_events(manager,query['project'][0],home=HOME/'runtime-events'))
+                    except (ValueError,OSError) as exc:self.reply(409,{'ok':False,'code':'runtime_events_unavailable','error':str(exc) if isinstance(exc,ValueError) else '运行事件暂不可读取。'})
+                elif asset_path=='/api/project-inspection':
+                    try:
+                        query=parse.parse_qs(parse.urlsplit(self.path).query,keep_blank_values=True)
+                        if set(query)!={'project'} or len(query['project'])!=1:raise ValueError('工程查询无效。')
+                        from workbench_project_inspection import project_inspection
+                        self.reply(200,project_inspection(manager,query['project'][0]))
+                    except (ValueError,OSError) as exc:self.reply(409,{'ok':False,'code':getattr(exc,'code','inspection_unavailable'),'error':str(exc) if isinstance(exc,ValueError) else '工程读取暂不可用。'})
+                elif asset_path=='/api/fuxa/recovery':
+                    try:
+                        query=parse.parse_qs(parse.urlsplit(self.path).query,keep_blank_values=True)
+                        if set(query)!={'project'} or len(query['project'])!=1:raise ValueError('工程查询无效。')
+                        from workbench_fuxa_recovery import recovery_status
+                        self.reply(200,recovery_status(manager,query['project'][0]))
+                    except ValueError as exc:self.reply(400,{'ok':False,'error':str(exc)})
+                elif asset_path=='/api/agent/tasks/preview':
+                    try:
+                        query=parse.parse_qs(parse.urlsplit(self.path).query,keep_blank_values=True)
+                        if set(query)!={'project','task','digest'} or any(len(v)!=1 for v in query.values()):raise ValueError('预览查询无效。')
+                        from workbench_editor_link import checked_identity
+                        body={'projectId':query['project'][0],'taskId':query['task'][0],'candidateDigest':query['digest'][0]}
+                        checked_identity(body);editor_project(body['projectId'])
+                        self.reply(200,editor_task_call('/v1/tasks/'+body['taskId']+'/preview',{'projectId':body['projectId'],'candidateDigest':body['candidateDigest']}))
+                    except Exception as exc:self.reply(409,{'ok':False,'error':getattr(exc,'message',str(exc) if isinstance(exc,ValueError) else '修改预览暂不可用。')})
+                elif asset_path in ('/api/agent/tasks','/api/agent/task-records','/api/agent/task-state'):
                     try:
                         query=parse.parse_qs(parse.urlsplit(self.path).query,keep_blank_values=True)
                         if set(query)!={'project'} or len(query['project'])!=1:raise AgentGatewayError('工程查询无效。',400)
-                        self.reply(200,agent_tasks(manager,query['project'][0]))
+                        self.reply(200,agent_tasks(manager,query['project'][0]) if asset_path=='/api/agent/tasks'
+                                   else agent_task_records(manager,query['project'][0],current=asset_path.endswith('/task-state')))
                     except AgentGatewayError as exc:self.reply(exc.status,{'ok':False,'error':str(exc)})
                     except ValueError as exc:self.reply(409,{'ok':False,'error':str(exc)})
                 elif asset_path=='/api/status':
@@ -809,6 +1126,12 @@ def serve():
                 try:
                     if self.headers.get('Content-Type')!='application/json':raise ValueError('无效请求')
                     length=int(self.headers.get('Content-Length','0'))
+                    if self.path in ('/api/editor/prepare','/api/editor/open','/api/editor/resource-open','/api/editor/resource-status','/api/editor/verify-prepared'):
+                        if self.headers.get('Origin') is not None or not 0<length<=16384:raise ValueError('编辑器连接仅接受本机服务端请求。')
+                        body=json.loads(self.rfile.read(length))
+                        try:self.reply(200,editor_links.prepare(body) if self.path.endswith('/prepare') else editor_links.verify_prepared(body) if self.path.endswith('/verify-prepared') else editor_links.open_resource(body) if self.path.endswith('/resource-open') else editor_links.resource_status(body) if self.path.endswith('/resource-status') else editor_links.open(body))
+                        except Exception as exc:self.reply(409,{'ok':False,'error':getattr(exc,'message',str(exc) if isinstance(exc,ValueError) else '编辑器打开结果尚未确认。')})
+                        return
                     if self.path.startswith('/api/agent/team/'):
                         if self.headers.get('Origin') is not None or not 0<length<=131072:
                             raise AgentGatewayError('团队入口仅接受本机服务端请求。',403)
@@ -835,11 +1158,19 @@ def serve():
                         except ModelBrokerError as exc:self.reply(409,{'ok':False,'error':str(exc)})
                         except Exception:self.reply(409,{'ok':False,'error':'model-configuration-unavailable'})
                         return
-                    if self.path in ('/api/agent/tasks','/api/agent/tasks/open','/api/agent/tasks/review'):
-                        if not 0<length<=131072:raise AgentGatewayError('请求过长。',400)
+                    if self.path=='/api/project-inspection':
+                        if not 0<length<=131072:raise ValueError('请求过长。')
+                        body=json.loads(self.rfile.read(length))
+                        if not isinstance(body,dict):raise ValueError('无效请求。')
+                        from workbench_project_inspection import project_inspection
+                        try:self.reply(200,project_inspection(manager,body.get('projectId'),body))
+                        except (ValueError,OSError) as exc:self.reply(409,{'ok':False,'code':getattr(exc,'code','inspection_unavailable'),'error':str(exc) if isinstance(exc,ValueError) else '读取记录结果未确认，请刷新核对。'})
+                        return
+                    if self.path in ('/api/agent/tasks','/api/agent/tasks/open','/api/agent/tasks/review','/api/agent/tasks/review-receipt'):
+                        if not 0<length<=(1048576 if self.path=='/api/agent/tasks' else 131072):raise AgentGatewayError('请求过长。',400)
                         body=json.loads(self.rfile.read(length))
                         if not isinstance(body,dict):raise AgentGatewayError('无效请求。',400)
-                        result=agent_tasks(manager,body.get('projectId'),body) if self.path=='/api/agent/tasks' else agent_review_candidate(manager,body) if self.path=='/api/agent/tasks/review' else agent_open_candidate(manager,body)
+                        result=agent_tasks(manager,body.get('projectId'),body) if self.path=='/api/agent/tasks' else agent_review_candidate(manager,body) if self.path=='/api/agent/tasks/review' else agent_review_receipt(manager,body) if self.path=='/api/agent/tasks/review-receipt' else agent_open_candidate(manager,body)
                         self.reply(200,result)
                         return
                     if self.path!='/api/action':raise ValueError('无效请求')

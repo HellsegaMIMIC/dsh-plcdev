@@ -28,4 +28,6 @@ test('project name and version metadata are accepted only for the exact target',
   assert.equal(revisionBasis(revision,undefined).same,null);
   assert.equal(artifactRows({candidate:{components:[{tool:'fuxa',summary:'Actual screen',widgets:31}]}})[1].widgets,31);
   assert.equal(artifactRows({candidate:{components:[]}})[0].component,null);
+  assert.equal(artifactRows({candidate:{components:[{tool:'fuxa',summary:{before:'旧',after:'新'}}]}})[1].summary,'旧 → 新');
+  assert.equal(artifactRows({candidate:{components:[{tool:'fuxa',summary:{before:{unsafe:true},after:'新'}}]}})[1].summary,null);
 });

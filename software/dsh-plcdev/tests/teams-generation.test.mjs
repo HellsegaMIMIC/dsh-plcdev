@@ -61,6 +61,20 @@ test('generation is a distinct model and analysis sessions cannot silently acqui
   await assert.rejects(f.team.tools.find(t=>t.name==='plcdev_plc_generate').execute({...f.ids,contextDigest:'d'.repeat(64),proposal:{operation:'batch-default-target',value:5}},f.exec('plc')),/角色/);
 });
 
+test('catalog admission follows actual route and professional role without registering members',async()=>{
+ const f=fixture(),route={provider:TEAM_PROVIDER,model:TEAM_GENERATION_MODEL};
+ for(const role of ['lead','plc','hmi','oip'])assert.deepEqual(await f.team.toolNamesFor({agent:f.agents.get(role),modelSelection:route}),GENERATION_ROLE_TOOLS[role]);
+ assert.ok(!f.calls.some(c=>c.operation==='member'),'Catalog inspection is read-only');
+ const a=f.agents.get('oip');
+ assert.deepEqual(await f.team.toolNamesFor({agent:a,modelSelection:{provider:'deepseek-account',model:'deepseek-flash'}}),[]);
+ a.options={provider:'deepseek-account',model:'deepseek-flash'};
+ assert.deepEqual(await f.team.toolNamesFor({agent:a,modelSelection:route}),[]);
+ a.options=route;a.session.header.isSeeded=true;
+ assert.deepEqual(await f.team.toolNamesFor({agent:a,modelSelection:route}),[]);
+ a.session.header.isSeeded=false;f.task.teamAnalysis.members.find(m=>m.role==='oip').sessionId='impostor';
+ assert.deepEqual(await f.team.toolNamesFor({agent:a,modelSelection:route}),[]);
+});
+
 for(const role of ['plc','hmi','oip'])test(`${role} receives only its independent generation route and rejects sibling/model lifecycle tools`,async()=>{
   const f=fixture();await f.stream(role);
   const sent=f.calls.find(c=>c.operation==='model').body;

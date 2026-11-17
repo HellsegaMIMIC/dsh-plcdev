@@ -83,7 +83,7 @@ test('real host A generates; reopened B revises; failure and unknown replay reta
   let authority;
   async function start(seed){
    ctx=new Context();await ctx.plugin(Sessions);await ctx.plugin(Projections);await ctx.plugin(Agents);await ctx.plugin(Llm);await ctx.plugin(SystemPrompt,{});await ctx.plugin(Tools,{mode:'native'});await ctx.plugin(AgentLoop,{agents:[],maxParallelToolCalls:1});
-   authority=createProjectContext({ctx,conversations});for(const tool of createNativeTools({bridge,conversations,projectContext:authority}))ctx.tools.register(tool);
+   authority=createProjectContext({ctx,conversations,verifiedRoutes:[{provider:'offline-a',model:'a'},{provider:'offline-b',model:'b'}]});for(const tool of createNativeTools({bridge,conversations,projectContext:authority}))ctx.tools.register(tool);
    ctx.llm.registerAdapter(['offline-a','offline-b'],new Scripted());
    handle=await ctx.agents.create({sessionId:id,seed,agentOptions:selection.current,setup:c=>{installModelSelection(c,selection);}});
   }

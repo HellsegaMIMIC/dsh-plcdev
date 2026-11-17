@@ -1,3 +1,5 @@
-# DSH PLCdev plugin 0.5.0
+# DSH PLCdev plugin 0.5.9
 
-See the [repository README](../../README.md), [installation](../../docs/INSTALL.md) and [development status](../../docs/STATUS.md).
+Development preview for DeepSeek Harness. This plugin package contains the plugin host code and built interface; it is not the complete PLC/HMI/OIP toolchain. The local Python engineering services require the matching source tree, and native tools/Runtime are installed separately.
+
+See the [public source](https://github.com/HellsegaMIMIC/dsh-plcdev), [installation](https://github.com/HellsegaMIMIC/dsh-plcdev/blob/main/docs/INSTALL.md) and [current boundaries](https://github.com/HellsegaMIMIC/dsh-plcdev/blob/main/docs/STATUS.md).

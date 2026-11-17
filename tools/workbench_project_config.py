@@ -302,7 +302,7 @@ def validate_fuxa(path):
     return raw
 
 
-def validate_oip(source):
+def validate_oip(source, *, editing=False):
     source = _absolute_source(source)
     entry = source / 'project.json' if source.is_dir() else source
     if entry.name != 'project.json':
@@ -316,8 +316,10 @@ def validate_oip(source):
     scene = read_json(scene_path);files.add(scene_path)
     if scene.get('version') != 4 or not isinstance(scene.get('parts'), list):
         raise ValueError('OIP 场景格式无效')
-    plcs = scene.get('plcs')
-    if not isinstance(plcs, list) or len(plcs) != 1 or plcs[0].get('runsOn') != 'plc' or plcs[0].get('protocol') != 'serve' or plcs[0].get('connect') is not True:
+    plcs = scene.get('plcs', []) if editing else scene.get('plcs')
+    if editing and (not isinstance(plcs, list) or len(plcs) > 128 or any(not isinstance(plc, dict) for plc in plcs)):
+        raise ValueError('OIP 原生 PLC 配置格式无效')
+    if not editing and (not isinstance(plcs, list) or len(plcs) != 1 or plcs[0].get('runsOn') != 'plc' or plcs[0].get('protocol') != 'serve' or plcs[0].get('connect') is not True):
         raise ValueError('OIP 当前只支持一个外部 PLC 的 Modbus serve 场景')
     for key in ('program', 'tests'):
         paths = project.get(key, [])
@@ -455,6 +457,20 @@ def validate_interface_fuxa(path, contract_path):
     return raw
 
 
+def standalone_simulation_definition(simulation, root):
+    """Schema-1 may own an OIP editing asset without any PLC interface binding."""
+    fields(simulation, {'provider','project'}, {'provider','project'}, '场景引用')
+    if simulation['provider'] not in ('none','factoryio','oip'):
+        raise ValueError('普通工程仿真组件无效')
+    if simulation['project'] is None:
+        return {'scene':None}
+    if simulation['provider']!='oip':
+        raise ValueError('普通工程仅支持 OIP 原生场景资源；不能推断其他仿真连接')
+    scene_file=relative(root,simulation['project'])
+    validate_oip(scene_file,editing=True)
+    return {'scene':str(scene_file)}
+
+
 def interface_definition(manifest, root):
     """Resolve schema 3 without borrowing any batch roles or runtime observations."""
     root = Path(root).resolve()
@@ -510,7 +526,7 @@ def configure_interface_project(manifest_path, definition, hmi_source=None):
         raise ValueError('工程声明需要本机隔离 Runtime 目标')
     contract = validate_interface(definition)
     simulation = raw.get('simulation', {'provider':'none', 'project':None})
-    if raw['schemaVersion'] == 1:
+    if raw['schemaVersion'] == 1 and simulation.get('project') is None:
         simulation = {'provider':'none', 'project':None}
     model_simulation_definition(simulation, root, contract)
     if hmi_source is not None:
@@ -552,6 +568,10 @@ def model_simulation_definition(simulation, root, interface):
     root = Path(root).resolve()
     if simulation == {'provider':'none', 'project':None}:
         return {'scene':None}
+    if isinstance(simulation, dict) and simulation.get('provider') == 'oip' and set(simulation) == {'provider', 'project'}:
+        scene_file = relative(root, simulation['project'])
+        validate_oip(scene_file, editing=True)
+        return {'scene': str(scene_file)}
     fields(simulation, {'provider','project','bindings'}, {'provider','project','bindings'}, '模型场景引用')
     if simulation['provider'] not in ('local-model','oip'):
         raise ValueError('声明工程仿真只支持 none／local-model／oip')
@@ -563,10 +583,48 @@ def model_simulation_definition(simulation, root, interface):
             raise ValueError('数值模型不使用伪场景路径')
     else:
         scene_file = relative(root, simulation['project'])
-        validate_oip(scene_file)
+        validate_oip(scene_file, editing=True)
     return {'scene':str(scene_file) if scene_file else None,
             'modelBindingsPath':str(model_file), 'modelDefinition':definition,
             'modelBindingHash':model_binding_hash(definition)}
+
+
+def configure_oip_scene(manifest_path, source):
+    """Associate a copied native scene without inventing a numerical model link."""
+    path = Path(manifest_path).resolve(); root = path.parent; raw = read_json(path)
+    if type(raw.get('schemaVersion')) is not int or raw['schemaVersion'] not in (1,3):
+        raise ValueError('旧批次工程保留原连接配置；请使用普通工程关联 OIP 场景。')
+    if raw['schemaVersion']==3:interface_definition(raw, root)
+    else:
+        if raw.get('target')!={'provider':'openplc-runtime','mode':'local'} or raw.get('application',{}).get('provider')!='openplc':
+            raise ValueError('普通工程需要 OpenPLC 应用和本机运行目标。')
+        standalone_simulation_definition(raw.get('simulation'),root)
+    previous = raw['simulation']
+    if previous.get('provider') == 'local-model':
+        raise ValueError('当前工程使用数值模型；不能通过关联场景替换既有模型配置。')
+    source = _absolute_source(source)
+    scene = validate_oip(source / 'project.json' if source.is_dir() else source, editing=True)
+    expected = {file: hashlib.sha256(file.read_bytes()).hexdigest() for file in scene['files']}
+    revision = uuid.uuid4().hex[:16]
+    destination = relative(root, 'integration/' + revision + '/simulation/oip')
+    destination.mkdir(parents=True, exist_ok=False)
+    for file in scene['files']:
+        target = destination / file.relative_to(scene['root'])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(file, target)
+        if hashlib.sha256(target.read_bytes()).hexdigest() != expected[file]:
+            raise ValueError('导入过程中源场景改变，未发布配置。')
+    simulation = {'provider': 'oip', 'project': (destination / 'project.json').relative_to(root).as_posix()}
+    if previous.get('provider') == 'oip' and 'bindings' in previous:
+        simulation['bindings'] = previous['bindings']
+    updated = {**raw, 'configurationRevision': revision, 'simulation': simulation}
+    if updated['schemaVersion']==3:interface_definition(updated, root)
+    else:standalone_simulation_definition(updated['simulation'],root)
+    temporary = path.with_name(path.name + '.' + uuid.uuid4().hex + '.tmp')
+    with temporary.open('x', encoding='utf-8') as stream:
+        json.dump(updated, stream, ensure_ascii=False, indent=2); stream.write('\n'); stream.flush(); os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    return updated
 
 
 def configure_model_project(manifest_path, definition, oip_source=None):
@@ -581,7 +639,7 @@ def configure_model_project(manifest_path, definition, oip_source=None):
         raise ValueError('请先为普通工程保存 schema-3 公开接口')
     current=interface_definition(raw,root)
     binding=validate_model_binding(definition,current['interfaceDefinition'])
-    scene=validate_oip(oip_source) if oip_source is not None else None
+    scene=validate_oip(oip_source, editing=True) if oip_source is not None else None
     expected={f:hashlib.sha256(f.read_bytes()).hexdigest() for f in scene['files']} if scene else {}
     revision=uuid.uuid4().hex[:16];destination=relative(root,'integration/'+revision)
     destination.parent.mkdir(exist_ok=True);destination.mkdir(exist_ok=False)

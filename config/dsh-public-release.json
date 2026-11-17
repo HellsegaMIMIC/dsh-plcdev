@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "repositoryName": "dsh-plcdev",
-  "version": "0.5.0",
+  "versionSource": "software/dsh-plcdev/package.json",
   "distribution": "source-development-preview",
   "license": "GPL-3.0-only",
   "proposedLicense": "GPL-3.0-only",
@@ -18,12 +18,16 @@
     "workbench_agent_bootstrap",
     "plcdev_environment",
     "verify_source_release",
-    "manage_workbench_projects"
+    "manage_workbench_projects",
+    "oip_native_candidate_host"
   ],
   "testSeeds": [
     "test_dsh_decoupling_backend",
     "test_workbench_joint_candidate",
-    "test_workbench_agent_adapters"
+    "test_workbench_agent_adapters",
+    "test_workbench_runtime_events",
+    "test_workbench_oip_tools",
+    "test_workbench_oip_creation"
   ],
   "toolFiles": [
     "tools/plcdev_environment.ps1",
@@ -33,7 +37,9 @@
     "tools/restart_dsh_owned_host.ps1",
     "tools/fuxa_native_permission_gate.cjs",
     "tools/fuxa_native_permission_oracle.cjs",
-    "tools/fuxa_permission_engine.json"
+    "tools/fuxa_permission_engine.json",
+    "tools/oip_native_catalog.json",
+    "tools/sync-plcdev-brand.mjs"
   ],
   "configFiles": [
     "config/dsh-host.package-lock.json",
@@ -42,7 +48,12 @@
     "config/dsh-public-release.json"
   ],
   "extraFiles": [
-    "software/workbench-agent/requirements-lock.txt"
+    "software/dsh-plcdev/LICENSE",
+    "software/workbench-agent/requirements-lock.txt",
+    "software/native-preview-banner.js",
+    "software/native-preview-client.cjs",
+    "software/dsh-plcdev/src/client/native-ladder/README.md",
+    "software/dsh-plcdev/tests/fixtures/native-ladder.ld"
   ],
   "runtimeSourceDirectories": [],
   "allowedSuffixes": [
@@ -73,9 +84,12 @@
     "lib",
     "teaching-cases",
     "project-interface-demo",
-    "simulation"
+    "simulation",
+    "prototype",
+    "development"
   ],
   "excludedNames": [
+    "development.test.mjs",
     "artifact-provenance.json",
     "AGENTS.md",
     "README.md",
@@ -97,7 +111,8 @@
     "software/factoryio/editor_runtime_guard.py",
     "software/factoryio/editor_runtime_inputs.py",
     "software/hmi-batch/batch_runtime_monitor.py",
-    "software/fuxa-oip/batch_adapter.py"
+    "software/fuxa-oip/batch_adapter.py",
+    "software/factoryio/modbus_mock.py"
   ],
   "exampleProjectsIncluded": false
 }

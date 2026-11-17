@@ -1,7 +1,7 @@
 """Project/profile/session isolation and role mailbox fixtures; no applications run."""
 from pathlib import Path
 from unittest.mock import patch,Mock
-import copy,json,socket,struct,tempfile,threading,time,unittest
+import copy,io,json,socket,struct,tempfile,threading,time,unittest
 import workbench_fuxa_oip as app
 import fuxa_oip_session as session
 from workbench_project_config import default_bindings
@@ -32,6 +32,21 @@ class ProjectTests(unittest.TestCase):
 
     def manager(self,name='one'):return app.FuxaOipManager('test-controller',self.project(name))
 
+    def test_fuxa_start_failure_is_scoped_to_current_launch_and_never_echoes_log(self):
+        log=self.root/'fuxa.log';old=b'Error: [PLCDEV_FUXA_PROFILE_LOCKED] old failure\n';log.write_bytes(old+b'unrelated SECRET DATA\n')
+        self.assertEqual(app.fuxa_start_failure(log,len(old)),'本工程 FUXA 未启动，请查看日志')
+        for marker,expected in ((b'LOCKED','profile 已被其他实例使用'),(b'UNSUPPORTED','当前 Node 不支持'),(b'INVALID','锁目录或文件无效')):
+            log.write_bytes(old+b'Error: [PLCDEV_FUXA_PROFILE_'+marker+b'] arbitrary SECRET DATA')
+            message=app.fuxa_start_failure(log,len(old));self.assertIn(expected,message);self.assertNotIn('SECRET',message)
+        self.assertEqual(app.fuxa_start_failure(None,0),'本工程 FUXA 未启动，请查看日志')
+
+    def test_open_fuxa_surfaces_profile_lock_error_from_failed_owned_launch(self):
+        manager=self.manager();log=self.root/'fuxa.log';log.write_text('Error: [PLCDEV_FUXA_PROFILE_LOCKED] SECRET RAW LOG',encoding='utf-8')
+        item={'process':Mock(poll=Mock(return_value=1)),'logPath':log,'logOffset':0}
+        with patch.object(manager,'spawn_tool',return_value=item):
+            with self.assertRaisesRegex(RuntimeError,'profile 已被其他实例使用') as caught:manager.open_fuxa()
+        self.assertNotIn('SECRET',str(caught.exception))
+
     def test_two_uuid_projects_have_separate_stable_ports_profiles_and_session_pointers(self):
         one,two=self.project(),self.project('two')
         with patch.object(app,'open_port',return_value=False):
@@ -46,6 +61,18 @@ class ProjectTests(unittest.TestCase):
         with patch.object(app,'open_port',return_value=False):
             app.allocate(one)
             with self.assertRaisesRegex(ValueError,'UUID'):app.allocate(two)
+
+    def test_saved_versions_keep_uuid_and_separate_native_profiles_ports(self):
+        one=self.project();second={**one,'application':{'path':'.plcdev/versions/v000002-123456abcdef/content/plc/project.json'}}
+        third={**one,'application':{'path':'.plcdev/versions/v000003-abcdef123456/content/plc/project.json'}}
+        with patch.object(app,'open_port',return_value=False):
+            old,old_ports=app.allocate(one);new,new_ports=app.allocate(second);latest,latest_ports=app.allocate(third)
+            again,again_ports=app.allocate(second)
+        self.assertEqual(new,again);self.assertEqual(new_ports,again_ports)
+        self.assertEqual(app.read(new['home']/'owner.json')['projectId'],one['id'])
+        self.assertEqual(len({old['home'],new['home'],latest['home']}),3)
+        self.assertEqual(len(set([*old_ports.values(),*new_ports.values(),*latest_ports.values()])),9)
+        self.assertTrue((old['home']/'owner.json').exists())
 
     def test_stopped_project_move_preserves_ports_and_rebinds_owner(self):
         one=self.project();old=Path(one['manifestPath']);new=old.parent.with_name('moved')
@@ -84,6 +111,81 @@ class ProjectTests(unittest.TestCase):
         with patch.object(app,'listener_owned',return_value=False):
             with self.assertRaisesRegex(ValueError,'不属于'):manager.verify_tool_listener('oip')
         self.assertFalse(manager.tools['oip'].get('listenerVerified',False))
+
+    def test_owned_recovery_editor_checks_status_twice_for_new_and_reused_process(self):
+        for reused in (False,True):
+            with self.subTest(reused=reused):
+                manager=self.manager('one' if not reused else 'two');manager.ports={'fuxa':19010,'mcp':19011,'modbus':19012}
+                manager.paths['home'].mkdir(parents=True,exist_ok=True)
+                process=Mock(poll=Mock(return_value=None));transaction='12345678-1234-4123-8123-123456789abc'
+                context={'projectId':manager.project['id'],'configHash':manager.config_hash,'capability':'a'*48,'projectFileStatus':{'state':'ready' if reused else 'loading'},'transactionId':transaction if not reused else None,'recovery':{'state':'blocked','reasonCode':'native_write_unknown' if reused else 'ai_resolution_unknown'}}
+                status={'ok':True,'transactionId':transaction,'scope':'native-project-snapshot','deviceSecurityIncluded':False};calls=[]
+                def serve(request,timeout):
+                    route=request.full_url if hasattr(request,'full_url') else request;calls.append(route)
+                    if route.endswith('/plcdev/native-recovery/status'):
+                        self.assertEqual(request.data,b'{}');self.assertEqual(request.headers.get('X-plcdev-hmi'),'a'*48)
+                        return io.BytesIO(json.dumps(status).encode())
+                    return io.BytesIO(json.dumps(context).encode())
+                if reused:
+                    plan=manager.paths['home']/'fuxa-existing.json';write(plan.with_suffix('.started.json'),{'projectId':manager.project['id'],'child':{'pid':111}})
+                    manager.tools['fuxa']={'process':process,'plan':plan,'listenerVerified':True}
+                def launch(*args,**kwargs):
+                    plans=list(manager.paths['home'].glob('fuxa-*.json'));self.assertEqual(len(plans),1)
+                    write(plans[0].with_suffix('.started.json'),{'projectId':manager.project['id'],'child':{'pid':111}})
+                    return process
+                with patch.object(manager,'allocated'),patch.object(manager,'current_configuration',return_value=True),patch.object(app,'open_port',return_value=False),patch.object(app.subprocess,'Popen',side_effect=launch) as spawn,patch.object(app,'listener_owned',return_value=True) as owned,patch.object(app,'urlopen',side_effect=serve),patch.object(app.webbrowser,'open') as browser,patch.object(manager,'start',side_effect=AssertionError('Runtime started')):
+                    url=manager.open_fuxa();self.assertEqual(url,'http://127.0.0.1:19010/editor');browser.assert_called_once_with(url)
+                    self.assertEqual(spawn.call_count,0 if reused else 1);self.assertEqual(owned.call_count,2)
+                    self.assertEqual(sum(route.endswith('/plcdev/native-recovery/status') for route in calls),2)
+
+    def test_recovery_rejects_foreign_or_late_identity_and_never_opens_home(self):
+        transaction='12345678-1234-4123-8123-123456789abc'
+        for fault in ('foreign-listener','foreign-project','foreign-config','bad-owner','wrong-transaction','late-config','late-transaction','dead-process','malformed-recovery','null-recovery','list-recovery','home'):
+            with self.subTest(fault=fault):
+                manager=self.manager();manager.ports={'fuxa':19010,'mcp':19011,'modbus':19012};plan=self.root/'recovery-test.json';write(plan.with_suffix('.started.json'),{'projectId':manager.project['id'],'child':{'pid':111}})
+                process=Mock(poll=Mock(return_value=None));item={'process':process,'plan':plan,'listenerVerified':True};manager.tools['fuxa']=item
+                context={'projectId':manager.project['id'],'configHash':manager.config_hash,'capability':'a'*48,'projectFileStatus':{'state':'loading'},'transactionId':transaction,'recovery':{'state':'blocked','reasonCode':'ai_resolution_unknown'}}
+                if fault=='home':context['projectFileStatus']['state']='ready'
+                if fault=='malformed-recovery':context.update(projectFileStatus={'state':'ready'},recovery={})
+                if fault=='null-recovery':context.update(projectFileStatus={'state':'ready'},recovery=None)
+                if fault=='list-recovery':context.update(projectFileStatus={'state':'ready'},recovery=[])
+                status={'ok':True,'transactionId':transaction,'scope':'native-project-snapshot','deviceSecurityIncluded':False};count={'context':0,'status':0}
+                def serve(request,timeout):
+                    route=request.full_url if hasattr(request,'full_url') else request
+                    if route.endswith('/plcdev/native-recovery/status'):
+                        count['status']+=1
+                        if fault=='bad-owner':raise OSError('owner mismatch')
+                        value=dict(status)
+                        if fault=='wrong-transaction' or fault=='late-transaction' and count['status']==2:value['transactionId']='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+                        if fault=='dead-process':process.poll.return_value=1
+                    else:
+                        count['context']+=1;value=copy.deepcopy(context)
+                        if fault=='foreign-project':value['projectId']='user-'+'f'*32
+                        if fault=='foreign-config' or fault=='late-config' and count['context']==2:value['configHash']='foreign'
+                    return io.BytesIO(json.dumps(value).encode())
+                with patch.object(manager,'current_configuration',return_value=True),patch.object(app,'listener_owned',return_value=fault!='foreign-listener'),patch.object(app,'urlopen',side_effect=serve),patch.object(app.webbrowser,'open') as browser,patch.object(manager,'start',side_effect=AssertionError('Runtime started')):
+                    if fault in ('foreign-project','foreign-config'):
+                        with self.assertRaisesRegex(ValueError,'身份不匹配'):manager.fuxa_context()
+                    else:
+                        with self.assertRaises(RuntimeError):manager.open_fuxa('home' if fault=='home' else 'editor')
+                    browser.assert_not_called()
+
+    def test_snapshot_invalidates_existing_verified_on_unknown_and_recovers_after_double_check(self):
+        manager=self.manager();manager.ports={'fuxa':19010,'mcp':19011,'modbus':19012}
+        item={'process':Mock(poll=Mock(return_value=None)),'verified':True};manager.tools['fuxa']=item
+        self.assertTrue(manager.snapshot()['components']['eez']['projectOpenVerified'])
+        journal=manager.paths['fuxa']/'plcdev'/'transaction.json';write(journal,{'resolution':{'state':'unknown'}})
+        blocked=manager.snapshot();self.assertFalse(blocked['components']['eez']['projectOpenVerified']);self.assertEqual(blocked['links']['generate']['state'],'unknown');self.assertFalse(blocked['capabilities']['canShowHmi']);self.assertTrue(item['recoveryOnly'])
+        journal.unlink();ready={'projectId':manager.project['id'],'configHash':manager.config_hash,'capability':'a'*48,'projectFileStatus':{'state':'ready'}}
+        with patch.object(manager,'fuxa_context',side_effect=OSError('offline')) as ctx:
+            offline=manager.snapshot();self.assertFalse(offline['components']['eez']['projectOpenVerified']);self.assertTrue(item['recoveryOnly']);ctx.assert_called_once()
+            manager.snapshot();ctx.assert_called_once() # Failed refresh is rate limited.
+        item['recoveryCheckAt']=0
+        with patch.object(manager,'fuxa_context',side_effect=[ready,{**ready,'capability':'b'*48}]),patch.object(manager,'verify_tool_listener'):
+            stale=manager.snapshot();self.assertFalse(stale['components']['eez']['projectOpenVerified'])
+        item['recoveryCheckAt']=0
+        with patch.object(manager,'fuxa_context',side_effect=[ready,ready]) as ctx,patch.object(manager,'verify_tool_listener') as verified:
+            recovered=manager.snapshot();self.assertTrue(recovered['components']['eez']['projectOpenVerified']);self.assertEqual(recovered['links']['generate']['state'],'current');self.assertFalse(item['recoveryOnly']);self.assertEqual(ctx.call_count,2);self.assertEqual(verified.call_count,2)
 
     def test_page_edit_does_not_invalidate_runtime_but_binding_or_scene_edit_does(self):
         project=self.project();original=app.fingerprint(project)
@@ -281,6 +383,16 @@ class NativeOwnershipTests(unittest.TestCase):
         with patch.object(app,'same_process',return_value=True),patch.object(native_owner,'listener_descends_from',side_effect=OSError('SECRET command implementation')):
             with self.assertRaises(ValueError) as error:app.listener_owned(19010,{'pid':2})
         self.assertNotIn('SECRET',str(error.exception));self.assertIn('端口归属',str(error.exception))
+
+    def test_exact_listener_pid_needs_no_ancestor_snapshot_but_other_listeners_do(self):
+        with patch.object(native_owner,'listener_pids',return_value={2}),patch.object(native_owner,'process_parents',side_effect=AssertionError('direct owner needs no ancestry')):
+            self.assertTrue(native_owner.listener_descends_from(19010,2))
+            with patch.object(app,'same_process',side_effect=[True,False]):self.assertFalse(app.listener_owned(19010,{'pid':2}))
+        with patch.object(native_owner,'listener_pids',return_value=set()),patch.object(native_owner,'process_parents',side_effect=AssertionError('no listener')):
+            self.assertFalse(native_owner.listener_descends_from(19010,2))
+        for listeners,parents,expected in [({2,3},{2:1,3:2},True),({2,8},{2:1,8:1},False),({3},{2:1,3:2},True),({3},{3:2},False)]:
+            with self.subTest(listeners=listeners,parents=parents),patch.object(native_owner,'listener_pids',return_value=listeners),patch.object(native_owner,'process_parents',return_value=parents) as snapshot:
+                self.assertEqual(native_owner.listener_descends_from(19010,2),expected);snapshot.assert_called_once()
 
 
 if __name__=='__main__':

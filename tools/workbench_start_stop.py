@@ -85,7 +85,9 @@ class LocalProjectManager:
     def event(self, message):
         with self.lock:
             self.message = message
-            self.events.append(dict(at=time.time(), message=message, projectId=self.project['id']))
+            self.events.append(dict(at=time.time(), message=message, projectId=self.project['id'],
+                                    sessionId=(self.manifest or {}).get('sessionId'),
+                                    programHash=(self.manifest or {}).get('programHash'), phase=self.phase))
             self.events = self.events[-60:]
 
     def dependencies(self):

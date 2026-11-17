@@ -13,6 +13,10 @@ export function createReadGate() {
 }
 
 export function validateSnapshot(value, projectId) {
+  if(value?.catalogOnly===true){
+    if(value.project?.id!=='catalog'||value.project?.kind!=='catalog'||!Array.isArray(value.projects)||value.projects.length||value.session?.id!==null||value.session?.projectId!=='catalog'||projectId&&projectId!=='catalog')throw new Error('工程目录身份未确认。');
+    return value;
+  }
   if (!value || typeof value.project?.id !== 'string' || !Array.isArray(value.projects)) throw new Error('工程服务未返回有效工程身份。');
   if (projectId && value.project.id !== projectId) throw new Error('工程服务返回了其他工程，已停用操作。');
   if (!value.projects.some(p => p.id === value.project.id)) throw new Error('当前工程不在工程清单中。');
@@ -58,11 +62,16 @@ export function externalRuntimeOwner(snapshot) {
 export function runtimeOwnerLabel(owner) {
   return owner?.state === 'unknown' ? '共享 Runtime 状态无法核验' : '共享 Runtime 被其他入口占用';
 }
+export function runtimeObservationFresh(snapshot, now = Date.now()) {
+  const at = snapshot?.state?.observedAt;
+  return snapshot?.session?.active === true && snapshot.observerFresh === true &&
+    typeof at === 'number' && Number.isFinite(at) && now - at * 1000 >= 0 && now - at * 1000 < 2000;
+}
 export function graphEntities(snapshot) {
   const p = snapshot?.project || {}, c = snapshot?.components || {};
   const fuxa = ['fuxa-oip', 'fuxa-local'].includes(p.defaultMode);
   const hmi = p.configuration?.hmiFile || p.hmi;
-  const scene = p.defaultMode === 'fuxa-local' ? null : p.configuration?.sceneFile || p.scene;
+  const scene = p.scene || p.configuration?.sceneFile;
   const entities = [];
   if (p.plc) entities.push({ id: 'plc', title: 'OpenPLC', role: 'PLC 工程', path: p.plc, tool: 'plc', component: c.plc, icon: 'plc' });
   if (p.target || p.targetDefinition || c.runtime) entities.push({ id: 'runtime', title: 'OpenPLC Runtime', role: '本机执行实例', path: p.target || '本机隔离 Runtime', component: c.runtime, icon: 'runtime' });
@@ -85,4 +94,4 @@ export function connectionLabel(snapshot, key, connected, now = Date.now()) {
   if (key === 'variables' && l.dataQuality === 'historical' && snapshot.state?.runtimeState === 'STOPPED') return { label: '历史值', tone: 'muted' };
   return { label: l.state === 'connected' || l.state === 'stale' ? '数据过期' : l.label || '尚未确认', tone: 'warn' };
 }
-export const taskStatus = value => ({ superseded: '已被新候选替代', team_waiting: '等待专业成员成果', analysis_ready: '专业分析已收回', components_ready: '三端产物齐全 · 待组装', generation_assembling: '组装结果待核对', queued: '待执行', pending: '待执行', created: '已创建', running: '执行中', generating: '生成候选', validating: '校验中', awaiting_review: '待审阅', needs_review: '待核对', blocked: '待处理', conflict: '冲突', failed: '失败', cancelled: '已取消', completed: '已完成', keeping: '正在保留', kept: '已保留为独立工程', discarding: '正在撤销', discarded: '候选已撤销', compiling: '正在编译', compiled: '编译通过', compile_failed: '编译失败', unknown_outcome: '结果待核对', not_ready: '尚未就绪' })[value] || value || '未知';
+export const taskStatus = value => ({ no_change:'无需修改', superseded: '已被新候选替代', team_waiting: '等待专业成员成果', analysis_ready: '专业分析已收回', components_ready: '三端产物齐全 · 待组装', generation_assembling: '组装结果待核对', queued: '待执行', pending: '待执行', created: '已创建', running: '执行中', generating: '生成候选', validating: '校验中', awaiting_review: '待审阅', needs_review: '待核对', blocked: '待处理', conflict: '冲突', failed: '失败', cancelled: '已取消', completed: '已完成', keeping: '正在保留', kept: '已保留', discarding: '正在撤销', discarded: '候选已撤销', compiling: '正在编译', compiled: '编译通过', compile_failed: '编译失败', unknown_outcome: '结果待核对', not_ready: '尚未就绪' })[value] || value || '未知';

@@ -1,0 +1,4127 @@
+{
+  "schemaVersion": 1,
+  "nativeVersion": "2026.11.9",
+  "nativeFiles": {
+    "main.cjs": "1c773063dd0a2bb9de38afc21f1e3bb08372d875b506c8e795e21642f03373eb",
+    "mcpServer.cjs": "86f949d22419566656abbb0da9cc5770d39d9a0e50bd3b5879771f0643305c42",
+    "agentProjects.cjs": "addb41f35f06c1865ddb17b67dbb64fb8dde6888bbb888096635237164ba76b7",
+    "preload.cjs": "b9d4d40f260ac057df05a354fdb10508bd4330c57c2e3bc11fd8ba362e0fd6ca",
+    "package.json": "e160b441cd0f8fb3f0feadf4713feb5e531f4947f59a332699abaadf907f2a1e"
+  },
+  "rendererFile": "tools-B23fR6Q3.js",
+  "rendererSha256": "f5f7f04fd42752a8533cc3a87f3389dda194dc60fc6ff17fbfcd3aa83e648b10",
+  "tools": [
+    {
+      "name": "get_scene",
+      "description": "List the open scene: every part with its id, name, package, position [x,y,z] in metres (+Y up), rotationY in radians, parent, and the PLC tags it is wired to. Also whether the simulation is running. A large scene lists its first 200 parts, says how many it left out and counts every part by package: narrow it with `package` (a package id or type), `within` (a box { min:[x,y,z], max:[x,y,z] } the part's origin is inside) or `parent` (the children of one part).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "package": {
+            "type": "string",
+            "description": "only parts of this package id (or type, for a group or a building)"
+          },
+          "within": {
+            "type": "object",
+            "description": "{ min: [x,y,z], max: [x,y,z] } in metres"
+          },
+          "parent": {
+            "type": "string",
+            "description": "only the children of this part id"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_part",
+      "description": "Read one part in full: its pose, every param value, and its package's param declarations (type, default, range, tag direction). For the building: which perimeter cells each wall holds (what a wall rule's `start` counts) and every dock door with the key `openDoors` names.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "part id, from get_scene"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_catalog",
+      "description": "List the parts that can be placed: package id, name, category, and its PLC tag params (in = the PLC drives the part, out = the part reports to the PLC). Optional text filter. get_package has one part's full params.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "case-insensitive filter on id, name or category"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_package",
+      "description": "Read one catalog part in full: every param with its type, default, range, unit and, for a tag, its direction, ST type and what each value means (`values`). `frame` gives the part's own frame at its defaults: footprint extents, where the origin sits, conveying ends, detection zones and sensor beams, all part-local in metres.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "package id from list_catalog"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "add_part",
+      "description": "Place a part from the catalog. position is [x, y, z] in metres with +Y up; for a conveyor, y is its belt height and a legged stand is sized to reach the floor. rotationY is radians about +Y. params are checked against the package (list_catalog). One undo step. Returns the new part id. package \"building\" places the warehouse shell (at most one per scene; position is its floor centre); its params are lengthSections, widthSections, heightSections, columnSpacing, rules (wall rules) and openDoors (dock door keys, from get_part).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "package": {
+            "type": "string",
+            "description": "package id from list_catalog, e.g. 'oip.belt-conveyor'"
+          },
+          "position": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "rotationY": {
+            "type": "number",
+            "description": "radians about +Y (default 0)"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent": {
+            "type": "string",
+            "description": "id of a part to soft-parent under"
+          },
+          "params": {
+            "type": "object",
+            "description": "param values to set, by key"
+          }
+        },
+        "required": [
+          "package",
+          "position"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "snap_part",
+      "description": "Seat a part where the editor's snap engine puts it when a person drops it: a conveyor butted to another's end or merged into its side, a sensor on a belt guard, a blade stop on a roller bed, a button on a cabinet face. Give `onto` (the host part id) and/or `near` ([x,y,z] where it is dropped; default: the host's top centre, or the part's own position). The pose, any params the snap fits (e.g. a sensor's range across the belt) and a mount's parenting are applied as ONE undo step. Use it after add_part instead of guessing a mounting pose.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "the part to seat"
+          },
+          "onto": {
+            "type": "string",
+            "description": "the host part id; default: any part in the scene"
+          },
+          "near": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "rotationY": {
+            "type": "number",
+            "description": "radians; default the part's own. A mount that faces a side may need a quarter turn"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "update_part",
+      "description": "Change a part: any of position, rotationY (radians), name, params (checked against its package; a tag param takes the PLC tag name to wire it to, \"\" unwires it). On the building, params are checked against its own params; openDoors takes the dock door keys get_part lists. One undo step.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "position": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "rotationY": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "delete_parts",
+      "description": "Delete parts by id. A part soft-parented under one goes with it. One undo step.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "duplicate_parts",
+      "description": "Copy a group of placed parts by an `offset` [x,y,z] in metres: a second station from the first, in one call. Parts soft-parented under them come along; links inside the group (parents, a spawner's conveyor) follow the copies. Tags are renamed by `rename` ({ old: new }) first, then `tagSuffix` is appended to every other tag; without either the copies share their tags with the originals. Reports a copied tag two parts now write. One undo step.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "offset": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "rename": {
+            "type": "object",
+            "description": "old tag -> new tag"
+          },
+          "tagSuffix": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ids",
+          "offset"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "check_part",
+      "description": "Check a part definition draft without keeping it: the manifest against the SDK schema (a misspelt field the app would silently IGNORE), then the app's own bake (the behavior runs once in the determinism sandbox; the rig, params and snap references are checked). Give `id` to start from an existing part and override its `behavior` and/or `manifest` fields; or give a whole new `manifest` and `behavior`. Returns the problems with line numbers, and on success the params the script declares.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "an existing part to start from"
+          },
+          "manifest": {
+            "type": "object",
+            "description": "manifest fields: name, category, geometry, snap, conveyor, commsParam, holds, materials"
+          },
+          "behavior": {
+            "type": "string",
+            "description": "the behavior script: a definePart({...}) call"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "assign_io",
+      "description": "Give the PLC tags the parts are wired to by name an I/O address, for a real PLC: each is declared AT its address in the program (`Eye AT %IX100.0 : BOOL`) and its parts are rewired to the address, as one undo step. Without `list`, addresses are picked in order for the external PLC link's settings. With `list` (CSV text, the format get_io_list writes; at least Tag and Address columns) the addresses come from it. Returns what was assigned and what was left as it was, with the reason.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "list": {
+            "type": "string",
+            "description": "an I/O list as CSV text"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_io_list",
+      "description": "The scene's I/O list as CSV: one row per part wired to an I/O address (Tag, Address, Type, Direction, Modbus point, Device). A part still wired by name has no row until assign_io gives it an address. assign_io reads this format back.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_controllers",
+      "description": "The project's controllers. `main` is the default one, which runs every tag that names no controller. `named` are the ones a part reaches by writing the name before its tag, `Cell2::%IX0.0`: each with whether the project lists it (a tag naming one it does not list stays unconnected), whether it runs in the simulator or on an external PLC, whether Play runs it, and how many parts have a tag on it. A simulated controller runs the program instances the task table gives it (`instances`), on memory and I/O of its own: its instances read and drive only its own tags. An external PLC's address is the person's to give in Controller Properties. `watchOnly`: Play reads every tag from that PLC, sensors included, and writes nothing to it, because it runs real equipment.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_problems",
+      "description": "Check the scene the way the Problems panel does: program compile errors, wiring (tags nothing drives or reads, two writers, type clashes), part build and runtime errors. Also notes on what could not be checked. `flowFacts` (not shown in the panel) lists what physically happened in the current or last run (a box dropped, tipped, held still on a running conveyor, an eye flickering): facts, not errors, so judge them against what the line is meant to do. `folderError` (the project folder cannot be read or synced, so edits made there do not load) and `folderNote` (files in the folder that project.json does not list, so loading ignored them) are the folder banner's text.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    }
+  ],
+  "packages": [
+    {
+      "id": "oip.six-axis-robot",
+      "name": "Six-Axis Robot",
+      "category": "Equipment",
+      "params": {
+        "speed": {
+          "type": "number",
+          "label": "Joint speed (°/s)",
+          "desc": "Top speed along the joint-space path. All six joints are driven from one path parameter, so they start and arrive together instead of the fastest one finishing early.",
+          "default": 120,
+          "min": 5,
+          "max": 180
+        },
+        "accel": {
+          "type": "number",
+          "label": "Joint accel (°/s²)",
+          "desc": "How hard the arm ramps to and from the joint speed. Lower it for a heavier or more delicate payload; a short move may never reach top speed at all.",
+          "default": 720,
+          "min": 20,
+          "max": 2000
+        },
+        "scale": {
+          "type": "number",
+          "label": "Scale",
+          "desc": "Uniform size multiplier on the whole robot, applied to its collision bodies as well as its appearance - so a scaled arm really does reach further, rather than just looking bigger.",
+          "default": 1,
+          "min": 0.1,
+          "max": 10
+        },
+        "tool": {
+          "type": "enum",
+          "label": "Tool",
+          "desc": "What the robot carries on its flange: a vacuum plate that lifts what is under it, or a clamp gripper whose two paddles close on the sides of a load. Both pick a load of the tool size below, and the Vacuum steps and the vacuum tag work either one.",
+          "default": "vacuum",
+          "options": [
+            "vacuum",
+            "gripper",
+            "none"
+          ]
+        },
+        "toolSizeX": {
+          "type": "number",
+          "label": "Tool size X (m)",
+          "desc": "Length of the vacuum plate, or the width of the load the clamp closes on. The orange dots on the tool itself drag this in the viewport, and they ride the arm, so you can size the tool in whatever pose you are inspecting. Size it to the product you are picking - it is also the grab reach.",
+          "default": 0.5,
+          "min": 0.5,
+          "max": 3
+        },
+        "toolSizeZ": {
+          "type": "number",
+          "label": "Tool size Z (m)",
+          "desc": "Width of the vacuum plate, or how deep the clamp paddles are, dragged by the same orange dots on the tool.",
+          "default": 0.5,
+          "min": 0.5,
+          "max": 3
+        },
+        "cupPitchX": {
+          "type": "number",
+          "label": "Cup pitch X (m)",
+          "desc": "Centre-to-centre spacing of the suction cups along the plate length. The plate fits as many as the pitch allows, so tightening it adds cups rather than moving them.",
+          "default": 0.1,
+          "min": 0.01,
+          "max": 0.5
+        },
+        "cupPitchZ": {
+          "type": "number",
+          "label": "Cup pitch Z (m)",
+          "desc": "Centre-to-centre spacing of the suction cups across the plate width.",
+          "default": 0.1,
+          "min": 0.01,
+          "max": 0.5
+        },
+        "cupMarginX": {
+          "type": "number",
+          "label": "Cup margin X (m)",
+          "desc": "Inset from each end of the plate before the first cup, so the grid does not run off the edge.",
+          "default": 0.05,
+          "min": 0,
+          "max": 0.5
+        },
+        "cupMarginZ": {
+          "type": "number",
+          "label": "Cup margin Z (m)",
+          "desc": "Inset from each side of the plate before the first cup.",
+          "default": 0.05,
+          "min": 0,
+          "max": 0.5
+        },
+        "cupsEnabled": {
+          "type": "boolean",
+          "label": "Suction cups",
+          "desc": "Draw the cup grid under the plate. Appearance only - the grip itself comes from the vacuum tag, not from the cups being visible.",
+          "default": true
+        },
+        "commandTag": {
+          "type": "tag",
+          "label": "Command tag (job number)",
+          "desc": "Which job to run: 1 is the first job, 2 the second and so on. Set it BEFORE pulsing execute. A robot with no jobs takes a waypoint row here instead (0 is home). A number with no job or row behind it is ignored, and the arm stays put rather than guessing.",
+          "default": "",
+          "dir": "in",
+          "stType": "INT"
+        },
+        "executeTag": {
+          "type": "tag",
+          "label": "Execute tag (rising edge runs it)",
+          "desc": "Pulse this false-to-true to start the job. It is edge-triggered, so holding it true does NOT repeat - drop it and raise it again for each job.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "doneTag": {
+          "type": "tag",
+          "label": "Done tag (true while idle)",
+          "desc": "Handshake back to the program: true whenever the robot is ready for the next command. A job that ends on a Blend move reports done as it rounds that corner, so the next job can carry straight on. Wait for it before pulsing execute again, or the edge lands mid-job and is dropped.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "enableTag": {
+          "type": "tag",
+          "label": "Enable tag",
+          "desc": "The robot moves only while this is true. Drop it and the arm brakes to a stop where it is and the job holds, timers and all; raise it and the job carries on. Wire it to the cell being safe to work in. Until a program drives it, or with it empty, the robot is always enabled, so a merely-typed tag does not hold it.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "gripperTag": {
+          "type": "tag",
+          "label": "Vacuum tag",
+          "desc": "For a robot with no jobs: grip or release the load, read continuously, so hold it true for the whole carry. A robot with jobs switches its own vacuum with Vacuum steps and ignores this.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "in1Tag": {
+          "type": "tag",
+          "label": "Input 1 tag",
+          "desc": "A signal a job can wait on (a Wait for step). Robots have banks of these; wire the ones your jobs use.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "in2Tag": {
+          "type": "tag",
+          "label": "Input 2 tag",
+          "desc": "A signal a job can wait on (a Wait for step).",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "in3Tag": {
+          "type": "tag",
+          "label": "Input 3 tag",
+          "desc": "A signal a job can wait on (a Wait for step).",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "in4Tag": {
+          "type": "tag",
+          "label": "Input 4 tag",
+          "desc": "A signal a job can wait on (a Wait for step).",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "out1Tag": {
+          "type": "tag",
+          "label": "Output 1 tag",
+          "desc": "A signal a job switches (a Set step), to tell the program where it has got to. It holds its last value between jobs.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "out2Tag": {
+          "type": "tag",
+          "label": "Output 2 tag",
+          "desc": "A signal a job switches (a Set step).",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "out3Tag": {
+          "type": "tag",
+          "label": "Output 3 tag",
+          "desc": "A signal a job switches (a Set step).",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "out4Tag": {
+          "type": "tag",
+          "label": "Output 4 tag",
+          "desc": "A signal a job switches (a Set step).",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "waypoints": {
+          "type": "numberList",
+          "label": "Waypoints",
+          "desc": "The poses this robot knows, one row of six JOINT angles each - not a position in space, so the arm reaches a pose exactly as taught with no ambiguity about elbow or wrist. Name them, and jobs move to them by name. Pose the arm with the viewport gizmo and use Capture Pose to add one rather than typing angles.",
+          "default": [
+            [
+              0,
+              -45,
+              90,
+              25,
+              75,
+              0
+            ],
+            [
+              0,
+              -15,
+              55,
+              0,
+              80,
+              0
+            ],
+            [
+              110,
+              -15,
+              55,
+              0,
+              80,
+              0
+            ]
+          ]
+        },
+        "blendWaypoints": {
+          "type": "numberList",
+          "label": "Pass-through waypoints (robots without jobs)",
+          "desc": "For a robot with no jobs: which waypoints are VIA points. The arm reports done before it reaches one, so the next move can start while it is still running and the corner is rounded instead of braked to a stop. Jobs say this on each Move step instead.",
+          "default": []
+        },
+        "blendDeg": {
+          "type": "number",
+          "label": "Corner blend",
+          "desc": "How many joint degrees before a via point the arm starts cutting the corner. Larger rounds the path more and strays further from the taught pose; the arm caps it at a third of the move.",
+          "default": 12,
+          "min": 0,
+          "max": 60,
+          "unit": "°"
+        },
+        "jobs": {
+          "type": "numberList",
+          "label": "Jobs",
+          "desc": "The robot's own programs. The PLC runs one by number (the command tag) and the robot does the whole thing: moves, vacuum, waits, and the signals it sends back. While the scene runs, the step being run is highlighted.",
+          "default": []
+        },
+        "pose": {
+          "type": "numberList",
+          "label": "Idle pose",
+          "desc": "The pose a freshly placed robot rests in, and where one waiting for its first Execute sits. It is the arm you see in a stopped scene, so set it to something that reads as parked rather than mid-cycle.",
+          "default": [
+            [
+              0,
+              -45,
+              90,
+              25,
+              75,
+              0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "oip.diverter",
+      "name": "Diverter",
+      "category": "Equipment",
+      "params": {
+        "diverted": {
+          "type": "boolean",
+          "label": "Diverted",
+          "desc": "Push the blade across the lane to deflect cargo. This is the state it starts in; Use cycles it by hand. While a program drives the tag below, that program owns it instead.",
+          "default": false
+        },
+        "divertTime": {
+          "type": "number",
+          "label": "Divert time (s)",
+          "desc": "How long the blade takes to travel the full stroke, out or back. Too slow and cargo passes before the blade arrives.",
+          "default": 0.25,
+          "min": 0.05,
+          "max": 2
+        },
+        "divertDistance": {
+          "type": "number",
+          "label": "Divert distance (m)",
+          "desc": "How far the blade travels across the lane. Size it so the blade pushes cargo clear of the running surface rather than leaving it straddling the edge. The guide rods, the cylinder and the stand are built for this stroke, so a longer one makes a longer machine.",
+          "default": 0.75,
+          "min": 0.1,
+          "max": 1.5
+        },
+        "standHeight": {
+          "type": "number",
+          "label": "Stand height (m)",
+          "desc": "From the part origin, 0.2 m below the belt surface it is mounted against, down to whatever the stand stands on. Set automatically when the diverter is dropped or snapped, so its legs reach the floor at any belt height.",
+          "default": 0.3847,
+          "min": 0.1,
+          "max": 3,
+          "rest": "surfaceBelow"
+        },
+        "tag": {
+          "type": "tag",
+          "label": "Extend tag (true extends the pusher)",
+          "desc": "Extend the pusher from the program. While a program drives this tag it OWNS the diverter, so a hand Use in pilot mode is refused with \"In auto - PLC controlled\".",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        }
+      }
+    },
+    {
+      "id": "oip.blade-stop",
+      "name": "Blade Stop",
+      "category": "Equipment",
+      "params": {
+        "width": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Blade width across the lane. Size it to span the conveying surface, or cargo rides past the end of the blade.",
+          "default": 1.524,
+          "min": 0.1,
+          "max": 2
+        },
+        "active": {
+          "type": "boolean",
+          "label": "Active",
+          "desc": "Raise the blade to stop cargo. This is the state it starts in; Use cycles it by hand. While a program drives the tag below, that program owns it instead.",
+          "default": false
+        },
+        "raiseHeight": {
+          "type": "number",
+          "label": "Raise height (m)",
+          "desc": "How far the blade top stands above the conveying surface once raised - the height of the stop cargo meets. At rest the top parks just below the surface, so raising this lengthens the stroke.",
+          "default": 0.04,
+          "min": 0.02,
+          "max": 0.5
+        },
+        "airPressureHeight": {
+          "type": "number",
+          "label": "Air pressure height (m)",
+          "desc": "Mount height of the whole moving assembly - pistons, blade and rods together - above the housing. Trim it to sit the mechanism correctly against a particular deck; it shifts the REST position, not the stroke.",
+          "default": 0.07,
+          "min": 0,
+          "max": 0.12
+        },
+        "tag": {
+          "type": "tag",
+          "label": "Raise tag (true raises the blade)",
+          "desc": "Raise the blade from the program. While a program drives this tag it OWNS the blade stop, so a hand Use in pilot mode is refused with \"In auto - PLC controlled\".",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        }
+      }
+    },
+    {
+      "id": "oip.safety-gate",
+      "name": "Safety Gate",
+      "category": "Structure",
+      "params": {
+        "length": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Gate width, hinge post to latch post. Size it to the gap you are closing in the fence line.",
+          "default": 1,
+          "min": 0.5,
+          "max": 6
+        },
+        "open": {
+          "type": "boolean",
+          "label": "Open",
+          "desc": "Swing the leaf open. This is the state it starts in; Use swings it by hand, which is how someone in pilot mode walks through the guard line.",
+          "default": false
+        },
+        "openAngle": {
+          "type": "number",
+          "label": "Open angle (°)",
+          "desc": "How far the leaf swings about the hinge when open. Negative angles swing it the other way, for a gate that has to open into the aisle.",
+          "default": 110,
+          "min": -180,
+          "max": 180
+        },
+        "openSpeed": {
+          "type": "number",
+          "label": "Open speed (°/s)",
+          "desc": "How fast the leaf travels between shut and the open angle.",
+          "default": 180,
+          "min": 10,
+          "max": 720
+        },
+        "normallyClosed": {
+          "type": "boolean",
+          "label": "Normally closed (inverts the signal)",
+          "desc": "Invert the signal this gate publishes, so the tag reads true while the gate is SHUT - the safety convention, where a broken wire and an open gate look the same to the program. Affects the tag only, never the visuals.",
+          "default": false
+        },
+        "postColor": {
+          "type": "color",
+          "label": "Post color",
+          "desc": "Post tint.",
+          "default": "#f2bd0f"
+        },
+        "meshColor": {
+          "type": "color",
+          "label": "Mesh color",
+          "desc": "Tint of the leaf frame and the panel it holds.",
+          "default": "#0d0d0d"
+        },
+        "handleColor": {
+          "type": "color",
+          "label": "Handle color",
+          "desc": "Tint of the emergency release handle.",
+          "default": "#c91717"
+        },
+        "omitPostStart": {
+          "type": "boolean",
+          "label": "Omit start post",
+          "desc": "Suppress the post at local -X so a snapped neighbour draws the shared one instead. Snapping sets this for you.",
+          "default": false
+        },
+        "omitPostEnd": {
+          "type": "boolean",
+          "label": "Omit end post",
+          "desc": "Suppress the post at local +X so a snapped neighbour draws the shared one instead. Snapping sets this for you.",
+          "default": false
+        },
+        "tag": {
+          "type": "tag",
+          "label": "Gate signal tag",
+          "desc": "Where the gate publishes its state for the program to read. Whether true means open or shut is set by Normally closed above.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        }
+      }
+    },
+    {
+      "id": "oip.stack-light",
+      "name": "Stack Light",
+      "category": "Devices",
+      "params": {
+        "segments": {
+          "type": "number",
+          "label": "Tiers",
+          "desc": "How many lamp tiers are stacked. Colours are fixed and cycle bottom-up: green, amber, red, blue, white.",
+          "default": 3,
+          "min": 1,
+          "max": 8
+        },
+        "value": {
+          "type": "number",
+          "label": "Lit tiers",
+          "desc": "Which tiers are lit, one box per tier, the BOTTOM tier first (bit 0 of the bitmask the tag carries: 1 lights green, 2 amber, 3 both). Bits above the segment count are masked off. A program driving the tag below replaces this value.",
+          "default": 1,
+          "min": 0,
+          "max": 255
+        },
+        "tag": {
+          "type": "tag",
+          "label": "Lamp bitmask tag",
+          "desc": "The program writes the lit-tier bitmask here. While it drives the tag it OWNS the light, so the Value field above becomes a read-only readout and a hand Use is refused with \"In auto - PLC controlled\".",
+          "default": "",
+          "dir": "in",
+          "stType": "INT"
+        }
+      }
+    },
+    {
+      "id": "oip.diffuse-sensor",
+      "name": "Photo Eye",
+      "category": "Devices",
+      "params": {
+        "maxRange": {
+          "type": "number",
+          "label": "Max range (m)",
+          "desc": "How far down the beam a target still counts as present. The beam is cast along local +Z, so aim the sensor by rotating it; snapping it onto a conveyor guard fits this range across the lane for you.",
+          "default": 2,
+          "min": 0.1,
+          "max": 10
+        },
+        "mode": {
+          "type": "enum",
+          "label": "Sensing mode",
+          "desc": "How the eye is installed. Diffuse: the target itself reflects the light back to the eye, so nothing stands opposite it. Retro-reflective: the eye looks at a reflector on the far side of the lane and a target breaking that beam is detected; the reflector is drawn at Max range, so snapping the eye onto a conveyor guard puts it on the far guard. In the sim both detect the same way: a target in the beam before Max range.",
+          "default": "diffuse",
+          "options": [
+            "diffuse",
+            "retro"
+          ]
+        },
+        "showBeam": {
+          "type": "boolean",
+          "label": "Show beam",
+          "desc": "Draw the beam line in the viewport. A viewing aid only - hiding it does not change what the sensor detects.",
+          "default": true
+        },
+        "normallyClosed": {
+          "type": "boolean",
+          "label": "Normally closed (inverts the signal)",
+          "desc": "Invert the output, so the tag reads true when NOTHING is detected. The beam colour still follows the real detection, not the inverted signal.",
+          "default": false
+        },
+        "mark": {
+          "type": "string",
+          "label": "Only marked targets",
+          "desc": "Count a target only if a machine upstream left this mark on it (wrapped, or a label a labeller wrote). Empty: anything in the beam counts. This is how a program checks a product, not just its presence - a load that was never wrapped reads as clear.",
+          "default": ""
+        },
+        "tag": {
+          "type": "tag",
+          "label": "Presence tag",
+          "desc": "Where the photoeye publishes presence for the program to read. Whether true means blocked or clear is set by Normally closed above.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        }
+      }
+    },
+    {
+      "id": "oip.color-sensor",
+      "name": "Color Sensor",
+      "category": "Devices",
+      "params": {
+        "maxRange": {
+          "type": "number",
+          "label": "Max range (m)",
+          "desc": "How far down the beam a target is still read. The beam is cast along local +Z, so aim the sensor by rotating it.",
+          "default": 2,
+          "min": 0.1,
+          "max": 10
+        },
+        "showBeam": {
+          "type": "boolean",
+          "label": "Show beam",
+          "desc": "Draw the beam line in the viewport. A viewing aid only - hiding it does not change what the sensor reads.",
+          "default": true
+        },
+        "colors": {
+          "type": "color",
+          "label": "Colors",
+          "desc": "The colours this sensor tells apart. The colour code is the position in this list: 1 for the first, 2 for the second, and so on.",
+          "default": "#ff0000,#00ff00,#0000ff"
+        },
+        "tolerance": {
+          "type": "number",
+          "label": "Match tolerance",
+          "desc": "How far a tint may be from a listed colour and still match, in steps of 0 to 255 on each of red, green and blue. 0 matches only the exact colour. When two listed colours are within range, the closer one wins.",
+          "default": 80,
+          "min": 0,
+          "max": 255
+        },
+        "colorTag": {
+          "type": "tag",
+          "label": "Color code tag",
+          "desc": "Where the detected colour code is published: the position of the matched colour in Colors (1 = the first), or 0. It reads 0 both when nothing is in range and when no listed colour matches, so pair it with a presence sensor if the difference matters.",
+          "default": "",
+          "dir": "out",
+          "stType": "INT",
+          "values": [
+            {
+              "value": 0,
+              "label": "none"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "oip.laser-sensor",
+      "name": "Laser Sensor",
+      "category": "Devices",
+      "params": {
+        "maxRange": {
+          "type": "number",
+          "label": "Max range (m)",
+          "desc": "How far down the beam a target is still measured. The beam is cast along local +Z, so aim the sensor by rotating it.",
+          "default": 4,
+          "min": 0.1,
+          "max": 10
+        },
+        "showBeam": {
+          "type": "boolean",
+          "label": "Show beam",
+          "desc": "Draw the beam line in the viewport. A viewing aid only - hiding it does not change what the sensor measures.",
+          "default": true
+        },
+        "distanceTag": {
+          "type": "tag",
+          "label": "Distance tag",
+          "desc": "Where the measured distance to the target is published, in metres. With nothing in range it reads the max range rather than 0, so compare against that to detect an empty beam.",
+          "default": "",
+          "unit": "m",
+          "dir": "out",
+          "stType": "REAL"
+        }
+      }
+    },
+    {
+      "id": "oip.push-button",
+      "name": "Push Button",
+      "category": "Devices",
+      "params": {
+        "emergencyStop": {
+          "type": "boolean",
+          "label": "Emergency stop (mushroom head)",
+          "desc": "A red mushroom head on a yellow station that latches when struck and stays in until it is used again, like twisting a real E-stop out. Its contact is always normally closed, so the tag reads true while the stop is released and false while it is in.",
+          "default": false
+        },
+        "text": {
+          "type": "string",
+          "label": "Face label",
+          "desc": "The legend plate above the button, the way a lamacoid is mounted. Keep it short enough to read at station distance.",
+          "default": "STOP"
+        },
+        "buttonColor": {
+          "type": "color",
+          "label": "Button color",
+          "desc": "Tint of the cap, and of the lamp when it lights.",
+          "default": "#b3140f"
+        },
+        "momentary": {
+          "type": "boolean",
+          "label": "Momentary (else maintained latch)",
+          "desc": "On, each press is a fixed 0.3 s pulse of sim time, like a spring-return start button - so a paused sim holds the pulse rather than letting it expire. Off, the button latches on one press and releases on the next, like a maintained selector.",
+          "default": true
+        },
+        "startPressed": {
+          "type": "boolean",
+          "label": "Starts pressed (maintained only)",
+          "desc": "A maintained button starts latched in, so a run begins with it pressed. A momentary button springs back on its own, so it ignores this.",
+          "default": false
+        },
+        "startStruck": {
+          "type": "boolean",
+          "label": "Starts struck",
+          "desc": "The emergency stop starts latched in, so a run begins with the stop open - the way to check that a line refuses to start until it is twisted out.",
+          "default": false
+        },
+        "normallyClosed": {
+          "type": "boolean",
+          "label": "Normally closed (inverts the signal)",
+          "desc": "Invert the output, so the tag reads true while the button is NOT pressed - the safety convention for a stop button, where a broken wire reads the same as a press.",
+          "default": false
+        },
+        "lampSource": {
+          "type": "enum",
+          "label": "Lamp source",
+          "desc": "What lights the cap. Follows press echoes this button, the way a contact strapped to the light block would. PLC tag hands the lamp to the program through Lamp tag below - the acknowledge wiring a real panel uses. Always on is a power-on indicator. Unlit is a button with no light block fitted.",
+          "default": "press",
+          "options": [
+            "press",
+            "tag",
+            "on",
+            "off"
+          ]
+        },
+        "tag": {
+          "type": "tag",
+          "label": "Button output tag",
+          "desc": "Where the button publishes its press for the program to read. Whether true means pressed or at-rest is set by Normally closed above.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "lampTag": {
+          "type": "tag",
+          "label": "Lamp tag (PLC lights the cap)",
+          "desc": "Which PLC bool lights the cap, so the program can acknowledge a press rather than just echo it. Read only when Lamp source above is set to PLC tag; left unbound there, the lamp stays dark like an unwired light block.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        }
+      }
+    },
+    {
+      "id": "oip.box-spawner",
+      "name": "Spawner",
+      "category": "Products",
+      "params": {
+        "boxesPerMinute": {
+          "type": "number",
+          "label": "Feed rate",
+          "desc": "Items per minute. 0 halts the feed without pausing the part, so the timer restarts cleanly when you raise it again.",
+          "default": 45,
+          "min": 0,
+          "max": 1000,
+          "unit": "/min"
+        },
+        "fixedRate": {
+          "type": "boolean",
+          "label": "Fixed rate (off = ±50% jitter)",
+          "desc": "On, items arrive on an exact metronome. Off, each gap is randomised between half and one-and-a-half times the nominal period, which is what an untidy real feed looks like downstream.",
+          "default": true
+        },
+        "product": {
+          "type": "string",
+          "label": "Product",
+          "desc": "The cargo part every item is, from the parts in the project: dropped as if placed, with its own size, colour, mass and product attributes. Its settings show below it. A Box takes the size, colour and mass under Box instead.",
+          "default": "oip.box"
+        },
+        "boxColor": {
+          "type": "color",
+          "label": "Box color",
+          "desc": "Tint for every spawned box. Ignored once the cycle list below is non-empty.",
+          "default": "#ffffff"
+        },
+        "boxColors": {
+          "type": "color",
+          "label": "Colors (cycle)",
+          "desc": "Colors handed out one per item, in order, overriding the colour of the product (or the Box color). Useful for telling sorted lanes apart at a glance. Leave empty to use the single colour.",
+          "default": ""
+        },
+        "mixAttribute": {
+          "type": "string",
+          "label": "Vary attribute",
+          "desc": "A product attribute each item starts with, from the values below: a label code, a destination. A scanner reads it, and a program routes by it. Empty for none.",
+          "default": ""
+        },
+        "mixValues": {
+          "type": "string",
+          "label": "Values (cycle)",
+          "desc": "The values handed out one per item, comma-separated, in order: \"1, 2, 2, 3\". Numbers stay numbers, true and false are booleans, anything else is text. They advance with the colour cycle, so item n takes value n and colour n.",
+          "default": ""
+        },
+        "randomColors": {
+          "type": "boolean",
+          "label": "Random order",
+          "desc": "Give each item a colour and a value drawn at random from the cycle lists instead of walking them in order.",
+          "default": false
+        },
+        "length": {
+          "type": "number",
+          "label": "Box length (m)",
+          "desc": "Extent along local X of each spawned box. Ignored while Random size is on.",
+          "default": 0.6,
+          "min": 0.1
+        },
+        "width": {
+          "type": "number",
+          "label": "Box width (m)",
+          "desc": "Extent along local Z of each spawned box. Ignored while Random size is on.",
+          "default": 0.4,
+          "min": 0.1
+        },
+        "height": {
+          "type": "number",
+          "label": "Box height (m)",
+          "desc": "Extent along local Y of each spawned box. Ignored while Random size is on.",
+          "default": 0.4,
+          "min": 0.1
+        },
+        "randomSize": {
+          "type": "boolean",
+          "label": "Random size",
+          "desc": "Give each box a random size and IGNORE the three dimensions above. The random range is fixed by the part (0.4-0.8 long, 0.3-0.5 high, 0.3-0.5 wide), not derived from them.",
+          "default": false
+        },
+        "mass": {
+          "type": "number",
+          "label": "Mass (kg)",
+          "desc": "Mass given to every spawned box, whatever its size.",
+          "default": 10,
+          "min": 0.5,
+          "max": 100
+        },
+        "disable": {
+          "type": "boolean",
+          "label": "Paused",
+          "desc": "Stop spawning entirely. Use (C, or E while walking) is a separate hand stop: it pauses and resumes the feed during a run without changing this setting, and is cleared when the run stops.",
+          "default": false
+        },
+        "release": {
+          "type": "enum",
+          "label": "Release",
+          "desc": "What reopening the gate (Paused, Use, the conveyor interlock, the run tag) does. Steady interval: items come at the feed rate and the gap since the last one is always kept, so a short pulse may drop nothing. On each enable: an item drops the moment the gate opens, then more at the feed rate while it stays open, so each pulse of the run tag dispenses one.",
+          "default": "interval",
+          "options": [
+            "interval",
+            "enable"
+          ]
+        },
+        "keepSpacing": {
+          "type": "boolean",
+          "label": "Keep spacing while held",
+          "desc": "Hold the interval while the feed is held instead of letting it run down, so boxes dropped onto a conveyor that stops with this spawner (give both the same run tag) stay one pitch apart however often the pair stops.",
+          "default": false
+        },
+        "conveyorId": {
+          "type": "partRef",
+          "label": "Pause when conveyor stopped",
+          "desc": "Interlock: while the named conveyor is stopped, this spawner holds. Wire that conveyor to the PLC and the feed gates itself, with no tag of its own.",
+          "default": ""
+        },
+        "runTag": {
+          "type": "tag",
+          "label": "Run tag (spawn only while true)",
+          "desc": "Gate the feed from the program. Note this only takes over once a program actually DRIVES the tag - until then the spawner keeps running, so a merely-declared tag is not a stopped feed.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "countTag": {
+          "type": "tag",
+          "label": "Spawned count tag",
+          "desc": "Running total of boxes this spawner has dispensed. Subtract the despawner counts to get the work in progress.",
+          "default": "",
+          "dir": "out",
+          "stType": "DINT"
+        }
+      }
+    },
+    {
+      "id": "oip.despawner",
+      "name": "Despawner",
+      "category": "Products",
+      "params": {
+        "length": {
+          "type": "number",
+          "label": "Length (m)",
+          "desc": "Local X extent of the volume that removes cargo. Cargo vanishes as soon as it is inside, so cover the full lane width or things slip past the edge.",
+          "default": 2,
+          "min": 0.2,
+          "max": 4
+        },
+        "width": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Local Z extent of the volume that removes cargo.",
+          "default": 2,
+          "min": 0.2,
+          "max": 4
+        },
+        "height": {
+          "type": "number",
+          "label": "Height (m)",
+          "desc": "Local Y extent of the volume that removes cargo.",
+          "default": 1,
+          "min": 0.2,
+          "max": 4
+        },
+        "countOnly": {
+          "type": "string",
+          "label": "Count only",
+          "desc": "Count just this product, so a tote carrying a case counts once. Everything in the mouth is still removed. (none) counts every body that goes in.",
+          "default": ""
+        },
+        "showReadout": {
+          "type": "boolean",
+          "label": "Show readout",
+          "desc": "Show the count, rate and cycle time on a plate above the volume. A viewing aid only: the displays and tags publish the same numbers either way.",
+          "default": false
+        },
+        "countTag": {
+          "type": "tag",
+          "label": "Throughput count tag",
+          "desc": "Running total of everything this despawner has removed, published for the program to read. It only ever climbs, so take differences over time to get a rate.",
+          "default": "",
+          "dir": "out",
+          "stType": "INT"
+        },
+        "rateTag": {
+          "type": "tag",
+          "label": "Throughput rate tag",
+          "desc": "Items removed per minute of simulated time, averaged over the whole run so far.",
+          "default": "",
+          "unit": "/min",
+          "dir": "out",
+          "stType": "REAL"
+        },
+        "cycleTag": {
+          "type": "tag",
+          "label": "Average cycle time tag",
+          "desc": "Average time, in simulated seconds, from an item coming into being (spawned, or already in the scene when the run started) to its removal here. 0 until the first item arrives.",
+          "default": "",
+          "unit": "s",
+          "dir": "out",
+          "stType": "REAL"
+        },
+        "blockTag": {
+          "type": "tag",
+          "label": "Block tag (pause removal while true)",
+          "desc": "While the program holds this true, nothing is removed and cargo backs up into the mouth - the way to model a downstream line that has stopped taking product.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        }
+      }
+    },
+    {
+      "id": "oip.belt-conveyor",
+      "name": "Belt Conveyor",
+      "category": "Equipment",
+      "params": {
+        "shapePreset": {
+          "type": "enum",
+          "label": "Shape preset",
+          "desc": "One-tap template for the segment table below. Picking an option writes its rows into Segments, which stays the source of truth - so hand-editing the table afterwards drifts this back to Custom rather than fighting you.",
+          "default": "straight",
+          "options": [
+            "straight",
+            "zframe",
+            "walkthru",
+            "noseover",
+            "custom"
+          ]
+        },
+        "segments": {
+          "type": "numberList",
+          "label": "Segments",
+          "desc": "One row per straight run: how long it is and how steeply it climbs, with the bend between runs filleted automatically. Add rows to build an incline, a Z-frame or a walk-through. The viewport shows a dot per run, so this is usually easier to drag than to type.",
+          "default": [
+            [
+              4,
+              0
+            ]
+          ]
+        },
+        "width": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Belt width across the direction of travel. Drag the dot on either side face to resize in the viewport.",
+          "default": 1.524,
+          "min": 0.2
+        },
+        "height": {
+          "type": "number",
+          "label": "Frame height (m)",
+          "desc": "Depth of the bed itself: deck down to underside, which is also the fillet radius where two segments meet and the depth of the side frame. NOT the height off the floor - that is Stand height below.",
+          "default": 0.17,
+          "min": 0.1,
+          "max": 0.6
+        },
+        "standHeight": {
+          "type": "number",
+          "label": "Stand height (m)",
+          "desc": "Height of the deck above whatever is beneath it, which sets the leg length. The host fills this in when you drop or snap the conveyor, so the legs reach the floor - or a platform crossing underneath - without you measuring. Pin it by hand when you want a deliberate height.",
+          "default": 2,
+          "min": 0.1,
+          "max": 3,
+          "rest": "surfaceBelow"
+        },
+        "fpmUnits": {
+          "type": "boolean",
+          "label": "PLC speed in FPM",
+          "desc": "The unit the PLC commands this conveyor in. On: feet per minute. Off: metres per second. The speed tag is a REAL either way, so switching changes what its value means and never how the program declares it. Set by the scene Units (Scene Properties), which switch every conveyor together, so the Inspector does not show it. A conveyor saved before this switch existed is in metres per second.",
+          "default": true
+        },
+        "speedFpm": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed in feet per minute. Negative runs it backwards. A program can command this through the FPM speed tag below.",
+          "default": 394,
+          "min": -600,
+          "max": 600,
+          "unit": "FPM"
+        },
+        "speed": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed carried along the bed. Negative runs the belt backwards, which is the ONLY way to reverse flow - rotating the part 180 degrees moves its ends instead. A program can command this through the speed tag below.",
+          "default": 2,
+          "min": -3,
+          "max": 3,
+          "unit": "m/s"
+        },
+        "accelTime": {
+          "type": "number",
+          "label": "Accel time",
+          "desc": "How long the drive takes to bring the conveyor from stopped up to its rated speed (the speed that reads 30, under Comms > Feedback), like the acceleration time set on a VFD. A smaller change takes proportionally less. 0 starts instantly.",
+          "default": 0.5,
+          "min": 0,
+          "max": 30,
+          "unit": "s"
+        },
+        "decelTime": {
+          "type": "number",
+          "label": "Decel time",
+          "desc": "How long the drive takes to bring the conveyor from rated speed down to a stop. Cargo keeps travelling while it does, so a box stopped at a photo-eye ends up past it. 0 stops instantly.",
+          "default": 0.5,
+          "min": 0,
+          "max": 30,
+          "unit": "s"
+        },
+        "friction": {
+          "type": "number",
+          "label": "Friction",
+          "desc": "Grip between the running surface and a standard carton, the figure a belt datasheet quotes. A smooth PVC belt is about 0.4, a rough-top incline belt about 0.9 and a low-friction plastic modular belt about 0.2, made for product to slide while it accumulates. Bare steel rollers are about 0.4. Other cargo grips by its own friction against the same surface.",
+          "default": 0.59,
+          "min": 0
+        },
+        "beltColor": {
+          "type": "color",
+          "label": "Belt color",
+          "desc": "Tint multiplied into the belt weave. White leaves the fabric at full brightness; a dark tint multiplies it down toward black.",
+          "default": "#ffffff"
+        },
+        "beltTexture": {
+          "type": "enum",
+          "label": "Belt weave",
+          "desc": "Which fabric the belt surface wears. Alternate carries directional arrows that scroll along travel, which is the cheapest way to make flow direction readable in a screenshot.",
+          "default": "standard",
+          "options": [
+            "standard",
+            "alternate"
+          ]
+        },
+        "frameRails": {
+          "type": "boolean",
+          "label": "Frame rails",
+          "desc": "Structural rails down both sides of the bed. Cosmetic - the running surface and its collision are unaffected.",
+          "default": true
+        },
+        "leftGuard": {
+          "type": "boolean",
+          "label": "Left guard",
+          "desc": "Guard wall down the left side, looking along travel. This is a real barrier, so turning it off lets cargo leave the belt sideways.",
+          "default": true
+        },
+        "rightGuard": {
+          "type": "boolean",
+          "label": "Right guard",
+          "desc": "Guard wall down the right side, looking along travel. This is a real barrier, so turning it off lets cargo leave the belt sideways.",
+          "default": true
+        },
+        "guardOpenings": {
+          "type": "numberList",
+          "label": "Guard openings",
+          "desc": "Gaps cut in the guard wall, measured as distance ALONG the belt from the tail. Side -1 is left, +1 is right, 0 cuts both. Each gap opens the collision as well as the mesh, which is how a transfer or a diverter gets product off the lane.",
+          "default": []
+        },
+        "legs": {
+          "type": "boolean",
+          "label": "Support legs",
+          "desc": "Master switch for the leg set below. Off leaves the bed floating, which is what you want when it is carried by a mezzanine or bolted to another frame.",
+          "default": true
+        },
+        "tailLeg": {
+          "type": "boolean",
+          "label": "Tail leg",
+          "desc": "Draw a leg pair at the tail - the upstream end, where cargo arrives.",
+          "default": true
+        },
+        "tailLegOffset": {
+          "type": "number",
+          "label": "Tail inset (m)",
+          "desc": "How far back from the tail drum the end leg stands. Increase it to clear whatever butts up against this end.",
+          "default": 0.15,
+          "min": 0,
+          "max": 2
+        },
+        "tailLegClearance": {
+          "type": "number",
+          "label": "Tail clearance (m)",
+          "desc": "Dead band past the tail leg before the evenly-spaced middle legs are allowed to start.",
+          "default": 1,
+          "min": 0,
+          "max": 5
+        },
+        "headLeg": {
+          "type": "boolean",
+          "label": "Head leg",
+          "desc": "Draw a leg pair at the head - the downstream end, where cargo discharges.",
+          "default": true
+        },
+        "headLegOffset": {
+          "type": "number",
+          "label": "Head inset (m)",
+          "desc": "How far back from the head drum the end leg stands. Increase it to clear whatever butts up against this end.",
+          "default": 0.15,
+          "min": 0,
+          "max": 2
+        },
+        "headLegClearance": {
+          "type": "number",
+          "label": "Head clearance (m)",
+          "desc": "Dead band before the head leg that the evenly-spaced middle legs must stop short of.",
+          "default": 1,
+          "min": 0,
+          "max": 5
+        },
+        "middleLegs": {
+          "type": "boolean",
+          "label": "Middle legs",
+          "desc": "Fill the span between the end legs with evenly-spaced intermediate ones.",
+          "default": true
+        },
+        "legSpacing": {
+          "type": "number",
+          "label": "Middle leg spacing (m)",
+          "desc": "Target gap between intermediate legs: 3.05 m is a real run supported at every 10 ft bed joint. The middle legs step on multiples of it, so the actual gap lands at or just under this.",
+          "default": 3.05,
+          "min": 0.5,
+          "max": 10
+        },
+        "exclusionStart": {
+          "type": "number",
+          "label": "Exclusion start (m)",
+          "desc": "Start of a stretch, measured along the belt from the tail, where no leg is drawn - room for a floor conveyor, a pit or a walkway crossing beneath. Leaving start and end equal disables the zone.",
+          "default": 0,
+          "min": 0,
+          "max": 100
+        },
+        "exclusionEnd": {
+          "type": "number",
+          "label": "Exclusion end (m)",
+          "desc": "End of the no-leg stretch. It must be GREATER than the start, or the zone is ignored entirely.",
+          "default": 0,
+          "min": 0,
+          "max": 100
+        },
+        "speedTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands belt speed here, replacing the Speed field above, which then shows the live value read-only. Careful: once BOUND this takes over even if no program drives it, and an undriven tag reads 0 - so a half-wired belt sits still rather than running at its authored speed.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "speedFpmTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands surface speed here in feet per minute, replacing the Speed field above, which then shows the live value read-only. Once BOUND this takes over even if no program writes it, so an unwritten tag holds the conveyor at 0.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "runTag": {
+          "type": "tag",
+          "label": "Run tag (belt runs while true)",
+          "desc": "Start/stop gate: false forces the speed to 0 whatever the setpoint says. Unlike the speed tag, this only takes effect once a program actually DRIVES it, so binding it alone will not stop the belt.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "runningTag": {
+          "type": "tag",
+          "label": "Running tag (true while moving)",
+          "desc": "Feedback the belt publishes for the program to read: true whenever it is actually moving. This is the EFFECTIVE speed, gates included, so a run tag holding the belt at zero reads false here.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "speedAt30": {
+          "type": "number",
+          "label": "Speed that reads 30 (m/s)",
+          "desc": "The surface speed this conveyor reaches when its drive turns at 30. It scales the velocity tag: running at exactly this speed reads 30.",
+          "default": 2,
+          "min": 0.01,
+          "max": 10
+        },
+        "speedAt30Fpm": {
+          "type": "number",
+          "label": "Speed that reads 30 (FPM)",
+          "desc": "The surface speed, in feet per minute, this conveyor reaches when its drive turns at 30. It scales the velocity tag: running at exactly this speed reads 30.",
+          "default": 394,
+          "min": 1,
+          "max": 2000
+        },
+        "velocityTag": {
+          "type": "tag",
+          "label": "Velocity tag (30 at the speed above)",
+          "desc": "Drive feedback the program reads: the effective speed as a share of the speed at 30 revolutions, times 30. Stopped reads 0, and a run tag holding the conveyor still counts as stopped.",
+          "default": "",
+          "dir": "out",
+          "stType": "REAL"
+        },
+        "inchesPerPulse": {
+          "type": "number",
+          "label": "Travel per pulse (in)",
+          "desc": "How far the surface travels between pulses on the pulse tag. A pulse cannot be finer than one simulation step, so a fast conveyor at a fine pitch needs a higher project simHz.",
+          "default": 1,
+          "min": 0.05,
+          "max": 100
+        },
+        "pulseTag": {
+          "type": "tag",
+          "label": "Pulse tag (one per pitch)",
+          "desc": "An encoder for the program to count: TRUE for one simulation step each time the surface has travelled the inches above, in either direction, and FALSE otherwise.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "encoderTag": {
+          "type": "tag",
+          "label": "Encoder tag (travel)",
+          "desc": "Odometer of surface travel in metres, integrated on sim time: it climbs while the conveyor runs forward and counts back while it reverses. Latch it when a photo-eye sees a box, then act once it has advanced a known distance - the standard way to track product without a sensor at every station.",
+          "default": "",
+          "unit": "m",
+          "dir": "out",
+          "stType": "REAL"
+        }
+      }
+    },
+    {
+      "id": "oip.roller-conveyor",
+      "name": "Roller Conveyor",
+      "category": "Equipment",
+      "params": {
+        "length": {
+          "type": "number",
+          "label": "Length (m)",
+          "desc": "Bed length along travel. Drag the dot on either end face to resize in the viewport; there is no upper limit, so one bed can stand in for a long run.",
+          "default": 4,
+          "min": 0.5
+        },
+        "width": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Bed width across travel. Drag the dot on either side face to resize in the viewport.",
+          "default": 1.524,
+          "min": 0.2
+        },
+        "frameHeight": {
+          "type": "number",
+          "label": "Frame height (m)",
+          "desc": "Depth of the side frame channel below the rollers. Set it to the Frame height of the conveyor this bed butts against so the two frames line up at the joint. The legs shorten or lengthen to meet the frame bottom; the deck height does not move.",
+          "default": 0.17,
+          "min": 0.1,
+          "max": 0.6
+        },
+        "fpmUnits": {
+          "type": "boolean",
+          "label": "PLC speed in FPM",
+          "desc": "The unit the PLC commands this conveyor in. On: feet per minute. Off: metres per second. The speed tag is a REAL either way, so switching changes what its value means and never how the program declares it. Set by the scene Units (Scene Properties), which switch every conveyor together, so the Inspector does not show it. A conveyor saved before this switch existed is in metres per second.",
+          "default": true
+        },
+        "speedFpm": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed in feet per minute. Negative runs it backwards. A program can command this through the FPM speed tag below.",
+          "default": 197,
+          "min": -600,
+          "max": 600,
+          "unit": "FPM"
+        },
+        "speed": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed carried along the bed. Negative runs the rollers backwards, which is the ONLY way to reverse flow - rotating the part 180 degrees moves its ends instead. A program can command this through the speed tag below.",
+          "default": 1,
+          "min": -3,
+          "max": 3,
+          "unit": "m/s"
+        },
+        "accelTime": {
+          "type": "number",
+          "label": "Accel time",
+          "desc": "How long the drive takes to bring the conveyor from stopped up to its rated speed (the speed that reads 30, under Comms > Feedback), like the acceleration time set on a VFD. A smaller change takes proportionally less. 0 starts instantly.",
+          "default": 0.2,
+          "min": 0,
+          "max": 30,
+          "unit": "s"
+        },
+        "decelTime": {
+          "type": "number",
+          "label": "Decel time",
+          "desc": "How long the drive takes to bring the conveyor from rated speed down to a stop. Cargo keeps travelling while it does, so a box stopped at a photo-eye ends up past it. 0 stops instantly.",
+          "default": 0.2,
+          "min": 0,
+          "max": 30,
+          "unit": "s"
+        },
+        "friction": {
+          "type": "number",
+          "label": "Friction",
+          "desc": "Grip between the running surface and a standard carton, the figure a belt datasheet quotes. A smooth PVC belt is about 0.4, a rough-top incline belt about 0.9 and a low-friction plastic modular belt about 0.2, made for product to slide while it accumulates. Bare steel rollers are about 0.4. Other cargo grips by its own friction against the same surface.",
+          "default": 0.42,
+          "min": 0
+        },
+        "skew": {
+          "type": "number",
+          "label": "Roller skew",
+          "desc": "Angle the rollers so cargo drifts sideways as it travels and squares itself against a side guard - the standard way to align product before a merge or a labeller. The surface velocity follows the angle, and the guard does the squaring, so leave the guard on that side up.",
+          "default": 0,
+          "min": -60,
+          "max": 60,
+          "unit": "°"
+        },
+        "tiltDeg": {
+          "type": "number",
+          "label": "Incline",
+          "desc": "Tilt the bed about its centre, positive lifting the head. Incline a roller bed this way, not by rotating the part, which tips its snap ends too; the legs regrow to the floor. Capped at 30 degrees: rollers shed product on a steeper grade, where a belt holds it.",
+          "default": 0,
+          "min": -30,
+          "max": 30,
+          "unit": "°"
+        },
+        "leftGuard": {
+          "type": "boolean",
+          "label": "Left guard",
+          "desc": "Guard wall down the left side, looking along travel. This is a real barrier, so turning it off lets cargo leave the bed sideways.",
+          "default": true
+        },
+        "rightGuard": {
+          "type": "boolean",
+          "label": "Right guard",
+          "desc": "Guard wall down the right side, looking along travel. This is a real barrier, so turning it off lets cargo leave the bed sideways.",
+          "default": true
+        },
+        "guardOpenings": {
+          "type": "numberList",
+          "label": "Guard openings",
+          "desc": "Gaps cut in the guard wall, measured as distance ALONG the bed from the tail. Side -1 is left, +1 is right, 0 cuts both. Each gap opens the collision as well as the mesh, which is how a transfer or a diverter gets product off the lane. Press G with the bed selected to drag them in the viewport.",
+          "default": []
+        },
+        "standHeight": {
+          "type": "number",
+          "label": "Stand height (m)",
+          "desc": "Height of the deck above whatever is beneath it, which sets the leg length. The host fills this in when you drop or snap the conveyor, so the legs reach the floor - or a platform crossing underneath - without you measuring. Pin it by hand when you want a deliberate height.",
+          "default": 2,
+          "min": 0.1,
+          "max": 3,
+          "rest": "surfaceBelow"
+        },
+        "speedTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands surface speed here, replacing the Speed field above, which then shows the live value read-only. Careful: once BOUND this takes over even if no program drives it, and an undriven tag reads 0 - so a half-wired conveyor sits still rather than running at its authored speed.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "speedFpmTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands surface speed here in feet per minute, replacing the Speed field above, which then shows the live value read-only. Once BOUND this takes over even if no program writes it, so an unwritten tag holds the conveyor at 0.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "runTag": {
+          "type": "tag",
+          "label": "Run tag (rollers run while true)",
+          "desc": "Start/stop gate: false forces the speed to 0 whatever the setpoint says. Unlike the speed tag, this only takes effect once a program actually DRIVES it, so binding it alone will not stop the bed.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "runningTag": {
+          "type": "tag",
+          "label": "Running tag (true while moving)",
+          "desc": "Feedback the conveyor publishes for the program to read: true whenever it is actually moving. This is the EFFECTIVE speed, gates included, so a run tag holding it at zero reads false here.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "speedAt30": {
+          "type": "number",
+          "label": "Speed that reads 30 (m/s)",
+          "desc": "The surface speed this conveyor reaches when its drive turns at 30. It scales the velocity tag: running at exactly this speed reads 30.",
+          "default": 1,
+          "min": 0.01,
+          "max": 10
+        },
+        "speedAt30Fpm": {
+          "type": "number",
+          "label": "Speed that reads 30 (FPM)",
+          "desc": "The surface speed, in feet per minute, this conveyor reaches when its drive turns at 30. It scales the velocity tag: running at exactly this speed reads 30.",
+          "default": 197,
+          "min": 1,
+          "max": 2000
+        },
+        "velocityTag": {
+          "type": "tag",
+          "label": "Velocity tag (30 at the speed above)",
+          "desc": "Drive feedback the program reads: the effective speed as a share of the speed at 30 revolutions, times 30. Stopped reads 0, and a run tag holding the conveyor still counts as stopped.",
+          "default": "",
+          "dir": "out",
+          "stType": "REAL"
+        },
+        "inchesPerPulse": {
+          "type": "number",
+          "label": "Travel per pulse (in)",
+          "desc": "How far the surface travels between pulses on the pulse tag. A pulse cannot be finer than one simulation step, so a fast conveyor at a fine pitch needs a higher project simHz.",
+          "default": 1,
+          "min": 0.05,
+          "max": 100
+        },
+        "pulseTag": {
+          "type": "tag",
+          "label": "Pulse tag (one per pitch)",
+          "desc": "An encoder for the program to count: TRUE for one simulation step each time the surface has travelled the inches above, in either direction, and FALSE otherwise.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "encoderTag": {
+          "type": "tag",
+          "label": "Encoder tag (travel)",
+          "desc": "Odometer of surface travel in metres, integrated on sim time: it climbs while the conveyor runs forward and counts back while it reverses. Latch it when a photo-eye sees a box, then act once it has advanced a known distance - the standard way to track product without a sensor at every station.",
+          "default": "",
+          "unit": "m",
+          "dir": "out",
+          "stType": "REAL"
+        }
+      }
+    },
+    {
+      "id": "oip.flex-conveyor",
+      "name": "Flex Conveyor",
+      "category": "Equipment",
+      "params": {
+        "points": {
+          "type": "numberList",
+          "label": "Path points",
+          "desc": "The bed runs from its infeed (the part origin, heading +X) along a smooth curve through these points, part-local metres, the last one being the discharge end. Drag the dots in the viewport to pull it into shape: S-curves, a turn through a door, a loop. The length follows.",
+          "default": [
+            [
+              3,
+              0
+            ],
+            [
+              6,
+              0
+            ],
+            [
+              8,
+              0
+            ]
+          ]
+        },
+        "infeedBrakes": {
+          "type": "boolean",
+          "label": "Infeed brakes",
+          "desc": "The caster brakes under the infeed end are on. Walking, a braked end cannot be pulled, and pulling the other end further than the bed reaches stops there instead of rolling the unit after you. The editor places it wherever you drag it.",
+          "default": false
+        },
+        "dischargeBrakes": {
+          "type": "boolean",
+          "label": "Discharge brakes",
+          "desc": "The caster brakes under the discharge end are on. Walking, a braked end cannot be pulled, and pulling the other end further than the bed reaches stops there instead of rolling the unit after you. The editor places it wherever you drag it.",
+          "default": false
+        },
+        "width": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Roller width between the scissor sides.",
+          "default": 0.6,
+          "min": 0.3,
+          "max": 1.2
+        },
+        "sideGuides": {
+          "type": "boolean",
+          "label": "Side guides",
+          "desc": "Low rails along both edges that keep product on the bed through a tight bend. Off, as a flex usually ships: a gentle bed carries without them, and a hard bend or a U-turn wants them on.",
+          "default": false
+        },
+        "standHeight": {
+          "type": "number",
+          "label": "Stand height (m)",
+          "desc": "Height of the roller tops above the floor. The legs under every hinge reach down to their casters.",
+          "default": 0.8,
+          "min": 0.4,
+          "max": 1.6
+        },
+        "fpmUnits": {
+          "type": "boolean",
+          "label": "PLC speed in FPM",
+          "desc": "The unit the PLC commands this conveyor in. On: feet per minute. Off: metres per second. The speed tag is a REAL either way, so switching changes what its value means and never how the program declares it. Set by the scene Units (Scene Properties), which switch every conveyor together, so the Inspector does not show it. A conveyor saved before this switch existed is in metres per second.",
+          "default": true
+        },
+        "speedFpm": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed in feet per minute. Negative runs it backwards. A program can command this through the FPM speed tag below.",
+          "default": 197,
+          "min": -600,
+          "max": 600,
+          "unit": "FPM"
+        },
+        "speed": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed along the bed. Negative runs it back toward the infeed.",
+          "default": 1,
+          "min": -3,
+          "max": 3,
+          "unit": "m/s"
+        },
+        "speedTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands the bed speed here, replacing the Speed field above. Once bound it takes over even if no program drives it, and an undriven tag reads 0.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "speedFpmTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands surface speed here in feet per minute, replacing the Speed field above, which then shows the live value read-only. Once BOUND this takes over even if no program writes it, so an unwritten tag holds the conveyor at 0.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "runTag": {
+          "type": "tag",
+          "label": "Run tag (rollers run while true)",
+          "desc": "Start/stop gate: while a program drives this tag false the bed stands still, and true it runs at its speed. Until a program actually drives it the bed runs, so a merely-typed tag does not stop it.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "accumulate": {
+          "type": "boolean",
+          "label": "Zone accumulation",
+          "desc": "Zero-pressure accumulation: each section is a zone with its own photo-eye, and a zone holding a case stops while the zone ahead is full, so product queues with gaps and never pushes. Off, the whole bed runs as one. Sections must be longer than the product.",
+          "default": false
+        },
+        "releaseTag": {
+          "type": "tag",
+          "label": "Release tag (discharge zone runs while true)",
+          "desc": "With accumulation on: the discharge zone lets its case go only while a program drives this true, so the line takes product when it wants it. Unbound, or not driven by a program, the discharge zone always releases.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "meterGap": {
+          "type": "number",
+          "label": "Release spacing (s)",
+          "desc": "With accumulation on: the least time between two cases leaving the discharge end. A queue released all at once goes out a zone apart; this meters it wider, to the spacing the line downstream is set up for.",
+          "default": 0,
+          "min": 0,
+          "max": 10
+        },
+        "fullTag": {
+          "type": "tag",
+          "label": "Full tag (first zone eye covered)",
+          "desc": "True while the first zone eye is covered: the last case has not cleared it, or the queue has backed up to it. Put the next case down (a case length and a gap behind that eye) only while this is false, and cases can never land on each other.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "showBeam": {
+          "type": "boolean",
+          "label": "Show beams",
+          "desc": "Draw each zone photo-eye beam across the bed: green where the zone is clear, red from the eye to the case it sees.",
+          "default": false
+        }
+      }
+    },
+    {
+      "id": "oip.turntable-conveyor",
+      "name": "Turntable Conveyor",
+      "category": "Equipment",
+      "params": {
+        "width": {
+          "type": "number",
+          "label": "Lane width (m)",
+          "desc": "Width of the conveying lane across the deck. Size it to the conveyors it indexes between, since the lane is what actually carries product once the deck has settled.",
+          "default": 1.524,
+          "min": 0.3
+        },
+        "standHeight": {
+          "type": "number",
+          "label": "Stand height (m)",
+          "desc": "Height of the deck above whatever is beneath it, which sets the leg length. The host fills this in when you drop or snap the turntable, so raising it regrows the legs to reach.",
+          "default": 0.95,
+          "min": 0.1,
+          "max": 3,
+          "rest": "surfaceBelow"
+        },
+        "fpmUnits": {
+          "type": "boolean",
+          "label": "PLC speed in FPM",
+          "desc": "The unit the PLC commands this conveyor in. On: feet per minute. Off: metres per second. The speed tag is a REAL either way, so switching changes what its value means and never how the program declares it. Set by the scene Units (Scene Properties), which switch every conveyor together, so the Inspector does not show it. A conveyor saved before this switch existed is in metres per second.",
+          "default": true
+        },
+        "speedFpm": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed in feet per minute. Negative runs it backwards. A program can command this through the FPM speed tag below.",
+          "default": 197,
+          "min": -600,
+          "max": 600,
+          "unit": "FPM"
+        },
+        "speed": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "How fast the lane conveys once the deck has SETTLED at its target angle. While the deck is still slewing the lane carries nothing forward - product just rides round with the platter - so this only applies between moves. Negative runs the lane backwards.",
+          "default": 1,
+          "min": -3,
+          "max": 3,
+          "unit": "m/s"
+        },
+        "deckAngleDeg": {
+          "type": "number",
+          "label": "Deck angle (°)",
+          "desc": "Target angle for the deck, which then slews to it and holds. This is the whole control surface with no tags named: an angled cross-feed you aim from the Inspector rather than a self-runner. A program commands it through the angle tag below instead.",
+          "default": 0,
+          "min": -180,
+          "max": 180
+        },
+        "rotationSpeedDeg": {
+          "type": "number",
+          "label": "Rotation speed",
+          "desc": "TOP slew rate, reached through a fixed acceleration ramp rather than instantly. The default indexes 90 degrees in about 5 seconds including both ramps, which is where real units sit - winding it much higher asks more of the deck than a real drive delivers, and product slides.",
+          "default": 20,
+          "min": 1,
+          "max": 360,
+          "unit": "°/s"
+        },
+        "angleTag": {
+          "type": "tag",
+          "label": "Target angle tag",
+          "desc": "The program commands the deck angle here, replacing the Deck angle field above. On the first scan the part SEEDS the tag with the authored angle, so a program that has not written yet does not slam the deck to zero.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "speedTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands lane speed here, replacing the Speed field above. Careful: once BOUND this takes over even if no program drives it, and an undriven tag reads 0.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "speedFpmTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands surface speed here in feet per minute, replacing the Speed field above, which then shows the live value read-only. Once BOUND this takes over even if no program writes it, so an unwritten tag holds the conveyor at 0.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "doneTag": {
+          "type": "tag",
+          "label": "Done tag (true once settled)",
+          "desc": "Handshake back to the program: true once the deck has stopped at its target angle. Wait on this before commanding the lane to run, or product is pushed at a deck still turning under it.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "enableTag": {
+          "type": "tag",
+          "label": "Enable tag",
+          "desc": "The deck turns only while this is true. Drop it mid-turn and the deck brakes to a stop where it is, still holding its load; raise it and the turn finishes. Lane speed is not affected: command that through the speed tag. Until a program drives it, or with it empty, the deck is always enabled, so a merely-typed tag does not hold it.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        }
+      }
+    },
+    {
+      "id": "oip.curved-conveyor",
+      "name": "Curved Belt Conveyor",
+      "category": "Equipment",
+      "params": {
+        "innerRadius": {
+          "type": "number",
+          "label": "Inner radius (m)",
+          "desc": "Radius of the INNER edge of the curve. The outer edge sits this plus the width away, so a tight inner radius on a wide bed makes a sharply banked turn that product can jam on.",
+          "default": 0.825,
+          "min": 0.2,
+          "max": 4
+        },
+        "width": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Bed width, measured across the curve from the inner edge to the outer one.",
+          "default": 1.524,
+          "min": 0.2
+        },
+        "height": {
+          "type": "number",
+          "label": "Frame height (m)",
+          "desc": "Depth of the belt loop, deck down to underside, which also sets the end drum size and the depth of the side frame. Set it to the Frame height of the conveyors this curve joins so the frames line up at each end. NOT the height off the floor - that is Stand height below.",
+          "default": 0.17,
+          "min": 0.1,
+          "max": 0.6
+        },
+        "sweepDeg": {
+          "type": "number",
+          "label": "Sweep (°)",
+          "desc": "How far the curve turns. 90 degrees is the usual corner; 180 turns a lane back on itself. The snap ends move with this, so a neighbour re-snaps to the new tangent rather than needing to be dragged.",
+          "default": 90,
+          "min": 15,
+          "max": 180
+        },
+        "fpmUnits": {
+          "type": "boolean",
+          "label": "PLC speed in FPM",
+          "desc": "The unit the PLC commands this conveyor in. On: feet per minute. Off: metres per second. The speed tag is a REAL either way, so switching changes what its value means and never how the program declares it. Set by the scene Units (Scene Properties), which switch every conveyor together, so the Inspector does not show it. A conveyor saved before this switch existed is in metres per second.",
+          "default": true
+        },
+        "speedFpm": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed in feet per minute. Negative runs it backwards. A program can command this through the FPM speed tag below.",
+          "default": 394,
+          "min": -600,
+          "max": 600,
+          "unit": "FPM"
+        },
+        "speed": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed carried around the curve. Negative reverses flow, which is the ONLY way to turn a curve around - spinning the part would swap its inner and outer radius. A program can command this through the speed tag below.",
+          "default": 2,
+          "min": -3,
+          "max": 3,
+          "unit": "m/s"
+        },
+        "accelTime": {
+          "type": "number",
+          "label": "Accel time",
+          "desc": "How long the drive takes to bring the conveyor from stopped up to its rated speed (the speed that reads 30, under Comms > Feedback), like the acceleration time set on a VFD. A smaller change takes proportionally less. 0 starts instantly.",
+          "default": 0.5,
+          "min": 0,
+          "max": 30,
+          "unit": "s"
+        },
+        "decelTime": {
+          "type": "number",
+          "label": "Decel time",
+          "desc": "How long the drive takes to bring the conveyor from rated speed down to a stop. Cargo keeps travelling while it does, so a box stopped at a photo-eye ends up past it. 0 stops instantly.",
+          "default": 0.5,
+          "min": 0,
+          "max": 30,
+          "unit": "s"
+        },
+        "friction": {
+          "type": "number",
+          "label": "Friction",
+          "desc": "Grip between the running surface and a standard carton, the figure a belt datasheet quotes. A smooth PVC belt is about 0.4, a rough-top incline belt about 0.9 and a low-friction plastic modular belt about 0.2, made for product to slide while it accumulates. Bare steel rollers are about 0.4. Other cargo grips by its own friction against the same surface.",
+          "default": 0.59,
+          "min": 0
+        },
+        "beltColor": {
+          "type": "color",
+          "label": "Belt color",
+          "desc": "Tint multiplied into the belt weave. White leaves the fabric at full brightness; a dark tint multiplies it down toward black.",
+          "default": "#ffffff"
+        },
+        "beltTexture": {
+          "type": "enum",
+          "label": "Belt weave",
+          "desc": "Which fabric the belt surface wears. Alternate carries directional arrows that scroll along travel, which is the cheapest way to make flow direction readable in a screenshot.",
+          "default": "standard",
+          "options": [
+            "standard",
+            "alternate"
+          ]
+        },
+        "innerGuard": {
+          "type": "boolean",
+          "label": "Inner guard",
+          "desc": "Guard wall along the INNER edge of the curve. A real barrier, so turning it off lets cargo cut the corner and leave the bed.",
+          "default": true
+        },
+        "outerGuard": {
+          "type": "boolean",
+          "label": "Outer guard",
+          "desc": "Guard wall along the OUTER edge, which is the one centrifugal drift pushes product against. A real barrier - turning it off is how you let product leave on the outside of a turn.",
+          "default": true
+        },
+        "standHeight": {
+          "type": "number",
+          "label": "Stand height (m)",
+          "desc": "Height of the deck above whatever is beneath it, which sets the leg length. The host fills this in when you drop or snap the conveyor, so the legs reach the floor - or a platform crossing underneath - without you measuring. Pin it by hand when you want a deliberate height.",
+          "default": 2,
+          "min": 0.1,
+          "max": 3,
+          "rest": "surfaceBelow"
+        },
+        "speedTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands surface speed here, replacing the Speed field above, which then shows the live value read-only. Careful: once BOUND this takes over even if no program drives it, and an undriven tag reads 0 - so a half-wired conveyor sits still rather than running at its authored speed.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "speedFpmTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands surface speed here in feet per minute, replacing the Speed field above, which then shows the live value read-only. Once BOUND this takes over even if no program writes it, so an unwritten tag holds the conveyor at 0.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "runTag": {
+          "type": "tag",
+          "label": "Run tag (belt runs while true)",
+          "desc": "Start/stop gate: false forces the speed to 0 whatever the setpoint says. Unlike the speed tag, this only takes effect once a program actually DRIVES it, so binding it alone will not stop the bed.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "runningTag": {
+          "type": "tag",
+          "label": "Running tag (true while moving)",
+          "desc": "Feedback the conveyor publishes for the program to read: true whenever it is actually moving. This is the EFFECTIVE speed, gates included, so a run tag holding it at zero reads false here.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "speedAt30": {
+          "type": "number",
+          "label": "Speed that reads 30 (m/s)",
+          "desc": "The surface speed this conveyor reaches when its drive turns at 30. It scales the velocity tag: running at exactly this speed reads 30.",
+          "default": 2,
+          "min": 0.01,
+          "max": 10
+        },
+        "speedAt30Fpm": {
+          "type": "number",
+          "label": "Speed that reads 30 (FPM)",
+          "desc": "The surface speed, in feet per minute, this conveyor reaches when its drive turns at 30. It scales the velocity tag: running at exactly this speed reads 30.",
+          "default": 394,
+          "min": 1,
+          "max": 2000
+        },
+        "velocityTag": {
+          "type": "tag",
+          "label": "Velocity tag (30 at the speed above)",
+          "desc": "Drive feedback the program reads: the effective speed as a share of the speed at 30 revolutions, times 30. Stopped reads 0, and a run tag holding the conveyor still counts as stopped.",
+          "default": "",
+          "dir": "out",
+          "stType": "REAL"
+        },
+        "inchesPerPulse": {
+          "type": "number",
+          "label": "Travel per pulse (in)",
+          "desc": "How far the surface travels between pulses on the pulse tag. A pulse cannot be finer than one simulation step, so a fast conveyor at a fine pitch needs a higher project simHz.",
+          "default": 1,
+          "min": 0.05,
+          "max": 100
+        },
+        "pulseTag": {
+          "type": "tag",
+          "label": "Pulse tag (one per pitch)",
+          "desc": "An encoder for the program to count: TRUE for one simulation step each time the surface has travelled the inches above, in either direction, and FALSE otherwise.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "encoderTag": {
+          "type": "tag",
+          "label": "Encoder tag (travel)",
+          "desc": "Odometer of surface travel in metres, integrated on sim time: it climbs while the conveyor runs forward and counts back while it reverses. Latch it when a photo-eye sees a box, then act once it has advanced a known distance - the standard way to track product without a sensor at every station.",
+          "default": "",
+          "unit": "m",
+          "dir": "out",
+          "stType": "REAL"
+        }
+      }
+    },
+    {
+      "id": "oip.curved-roller-conveyor",
+      "name": "Curved Roller Conveyor",
+      "category": "Equipment",
+      "params": {
+        "innerRadius": {
+          "type": "number",
+          "label": "Inner radius (m)",
+          "desc": "Radius of the INNER edge of the curve. The outer edge sits this plus the width away, so a tight inner radius on a wide bed makes a sharply banked turn that product can jam on.",
+          "default": 0.825,
+          "min": 0.2,
+          "max": 4
+        },
+        "width": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Bed width, measured across the curve from the inner edge to the outer one.",
+          "default": 1.524,
+          "min": 0.2
+        },
+        "frameHeight": {
+          "type": "number",
+          "label": "Frame height (m)",
+          "desc": "Depth of the side frame channel below the rollers. Set it to the Frame height of the conveyor this bed butts against so the two frames line up at the joint. The legs shorten or lengthen to meet the frame bottom; the deck height does not move.",
+          "default": 0.17,
+          "min": 0.1,
+          "max": 0.6
+        },
+        "sweepDeg": {
+          "type": "number",
+          "label": "Sweep (°)",
+          "desc": "How far the curve turns. 90 degrees is the usual corner; 180 turns a lane back on itself. The snap ends move with this, so a neighbour re-snaps to the new tangent rather than needing to be dragged.",
+          "default": 90,
+          "min": 15,
+          "max": 180
+        },
+        "fpmUnits": {
+          "type": "boolean",
+          "label": "PLC speed in FPM",
+          "desc": "The unit the PLC commands this conveyor in. On: feet per minute. Off: metres per second. The speed tag is a REAL either way, so switching changes what its value means and never how the program declares it. Set by the scene Units (Scene Properties), which switch every conveyor together, so the Inspector does not show it. A conveyor saved before this switch existed is in metres per second.",
+          "default": true
+        },
+        "speedFpm": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed in feet per minute. Negative runs it backwards. A program can command this through the FPM speed tag below.",
+          "default": 197,
+          "min": -600,
+          "max": 600,
+          "unit": "FPM"
+        },
+        "speed": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed at the centreline of the curve; the outer edge moves faster, which carries a box round square. Negative reverses flow, the ONLY way to turn a curve around (spinning it would swap its inner and outer radius).",
+          "default": 1,
+          "min": -3,
+          "max": 3,
+          "unit": "m/s"
+        },
+        "accelTime": {
+          "type": "number",
+          "label": "Accel time",
+          "desc": "How long the drive takes to bring the conveyor from stopped up to its rated speed (the speed that reads 30, under Comms > Feedback), like the acceleration time set on a VFD. A smaller change takes proportionally less. 0 starts instantly.",
+          "default": 0.2,
+          "min": 0,
+          "max": 30,
+          "unit": "s"
+        },
+        "decelTime": {
+          "type": "number",
+          "label": "Decel time",
+          "desc": "How long the drive takes to bring the conveyor from rated speed down to a stop. Cargo keeps travelling while it does, so a box stopped at a photo-eye ends up past it. 0 stops instantly.",
+          "default": 0.2,
+          "min": 0,
+          "max": 30,
+          "unit": "s"
+        },
+        "friction": {
+          "type": "number",
+          "label": "Friction",
+          "desc": "Grip between the running surface and a standard carton, the figure a belt datasheet quotes. A smooth PVC belt is about 0.4, a rough-top incline belt about 0.9 and a low-friction plastic modular belt about 0.2, made for product to slide while it accumulates. Bare steel rollers are about 0.4. Other cargo grips by its own friction against the same surface.",
+          "default": 0.42,
+          "min": 0
+        },
+        "innerGuard": {
+          "type": "boolean",
+          "label": "Inner guard",
+          "desc": "Guard wall along the INNER edge of the curve. A real barrier, so turning it off lets cargo cut the corner and leave the bed.",
+          "default": true
+        },
+        "outerGuard": {
+          "type": "boolean",
+          "label": "Outer guard",
+          "desc": "Guard wall along the OUTER edge, which is the one centrifugal drift pushes product against. A real barrier - turning it off is how you let product leave on the outside of a turn.",
+          "default": true
+        },
+        "standHeight": {
+          "type": "number",
+          "label": "Stand height (m)",
+          "desc": "Height of the deck above whatever is beneath it, which sets the leg length. The host fills this in when you drop or snap the conveyor, so the legs reach the floor - or a platform crossing underneath - without you measuring. Pin it by hand when you want a deliberate height.",
+          "default": 2,
+          "min": 0.1,
+          "max": 3,
+          "rest": "surfaceBelow"
+        },
+        "speedTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands surface speed here, replacing the Speed field above, which then shows the live value read-only. Careful: once BOUND this takes over even if no program drives it, and an undriven tag reads 0 - so a half-wired conveyor sits still rather than running at its authored speed.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "speedFpmTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands surface speed here in feet per minute, replacing the Speed field above, which then shows the live value read-only. Once BOUND this takes over even if no program writes it, so an unwritten tag holds the conveyor at 0.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "runTag": {
+          "type": "tag",
+          "label": "Run tag (rollers run while true)",
+          "desc": "Start/stop gate: false forces the speed to 0 whatever the setpoint says. Unlike the speed tag, this only takes effect once a program actually DRIVES it, so binding it alone will not stop the bed.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "runningTag": {
+          "type": "tag",
+          "label": "Running tag (true while moving)",
+          "desc": "Feedback the conveyor publishes for the program to read: true whenever it is actually moving. This is the EFFECTIVE speed, gates included, so a run tag holding it at zero reads false here.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "speedAt30": {
+          "type": "number",
+          "label": "Speed that reads 30 (m/s)",
+          "desc": "The surface speed this conveyor reaches when its drive turns at 30. It scales the velocity tag: running at exactly this speed reads 30.",
+          "default": 1,
+          "min": 0.01,
+          "max": 10
+        },
+        "speedAt30Fpm": {
+          "type": "number",
+          "label": "Speed that reads 30 (FPM)",
+          "desc": "The surface speed, in feet per minute, this conveyor reaches when its drive turns at 30. It scales the velocity tag: running at exactly this speed reads 30.",
+          "default": 197,
+          "min": 1,
+          "max": 2000
+        },
+        "velocityTag": {
+          "type": "tag",
+          "label": "Velocity tag (30 at the speed above)",
+          "desc": "Drive feedback the program reads: the effective speed as a share of the speed at 30 revolutions, times 30. Stopped reads 0, and a run tag holding the conveyor still counts as stopped.",
+          "default": "",
+          "dir": "out",
+          "stType": "REAL"
+        },
+        "inchesPerPulse": {
+          "type": "number",
+          "label": "Travel per pulse (in)",
+          "desc": "How far the surface travels between pulses on the pulse tag. A pulse cannot be finer than one simulation step, so a fast conveyor at a fine pitch needs a higher project simHz.",
+          "default": 1,
+          "min": 0.05,
+          "max": 100
+        },
+        "pulseTag": {
+          "type": "tag",
+          "label": "Pulse tag (one per pitch)",
+          "desc": "An encoder for the program to count: TRUE for one simulation step each time the surface has travelled the inches above, in either direction, and FALSE otherwise.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "encoderTag": {
+          "type": "tag",
+          "label": "Encoder tag (travel)",
+          "desc": "Odometer of surface travel in metres, integrated on sim time: it climbs while the conveyor runs forward and counts back while it reverses. Latch it when a photo-eye sees a box, then act once it has advanced a known distance - the standard way to track product without a sensor at every station.",
+          "default": "",
+          "unit": "m",
+          "dir": "out",
+          "stType": "REAL"
+        }
+      }
+    },
+    {
+      "id": "oip.chain-transfer",
+      "name": "Chain Transfer",
+      "category": "Equipment",
+      "params": {
+        "chains": {
+          "type": "number",
+          "label": "Chains",
+          "desc": "How many chain strands lift between the rollers. More strands spread the load, so a small or floppy carton is less likely to sag between them.",
+          "default": 5,
+          "min": 1,
+          "max": 10
+        },
+        "distance": {
+          "type": "number",
+          "label": "Lane spacing (m)",
+          "desc": "Centre-to-centre gap between chain strands. Together with the strand count this sets how wide the transfer reaches across the host bed.",
+          "default": 0.33,
+          "min": 0.03,
+          "max": 5
+        },
+        "laneLength": {
+          "type": "number",
+          "label": "Lane length (m)",
+          "desc": "How far each strand runs in the transfer direction - the stroke available to push product off the main line.",
+          "default": 2,
+          "min": 0.5,
+          "max": 3
+        },
+        "fpmUnits": {
+          "type": "boolean",
+          "label": "PLC speed in FPM",
+          "desc": "The unit the PLC commands this conveyor in. On: feet per minute. Off: metres per second. The speed tag is a REAL either way, so switching changes what its value means and never how the program declares it. Set by the scene Units (Scene Properties), which switch every conveyor together, so the Inspector does not show it. A conveyor saved before this switch existed is in metres per second.",
+          "default": true
+        },
+        "speedFpm": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed in feet per minute. Negative runs it backwards. A program can command this through the FPM speed tag below.",
+          "default": 394,
+          "min": -600,
+          "max": 600,
+          "unit": "FPM"
+        },
+        "speed": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "How fast the chains carry product sideways once raised. Negative sends it the other way.",
+          "default": 2,
+          "min": -3,
+          "max": 3,
+          "unit": "m/s"
+        },
+        "raised": {
+          "type": "boolean",
+          "label": "Raised (divert)",
+          "desc": "Lift the chains above the roller line to take the load off the main lane and drive it sideways. This is the state it starts in; Use cycles it by hand. While a program drives the pop-up tag below, that program owns it instead.",
+          "default": false
+        },
+        "raiseTime": {
+          "type": "number",
+          "label": "Pop-up time (s)",
+          "desc": "How long the chains take to rise or drop. A program must wait this out before running the transfer, and a quicker pop-up throws the load harder: at the default a packed row moves about 20 mm, and below about 0.07 s it loses its packing.",
+          "default": 0.15,
+          "min": 0.02,
+          "max": 2
+        },
+        "speedTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands chain speed here, replacing the Speed field above. Careful: once BOUND this takes over even if no program drives it, and an undriven tag reads 0.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "speedFpmTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands surface speed here in feet per minute, replacing the Speed field above, which then shows the live value read-only. Once BOUND this takes over even if no program writes it, so an unwritten tag holds the conveyor at 0.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "popupTag": {
+          "type": "tag",
+          "label": "Pop-up tag (true = divert)",
+          "desc": "Raise the chains from the program. While a program drives this tag it OWNS the transfer, so a hand Use in pilot mode is refused with \"In auto - PLC controlled\".",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        }
+      }
+    },
+    {
+      "id": "oip.spur-conveyor",
+      "name": "Spur Belt Conveyor",
+      "category": "Equipment",
+      "params": {
+        "length": {
+          "type": "number",
+          "label": "Length (m)",
+          "desc": "Bed length along travel, measured down the centreline. The end faces stay splayed at the angles below as it grows, so the short side and long side keep their difference.",
+          "default": 2,
+          "min": 0.5
+        },
+        "width": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Bed width across travel. Drag the dot on either side face to resize in the viewport.",
+          "default": 1.524,
+          "min": 0.2
+        },
+        "height": {
+          "type": "number",
+          "label": "Frame height (m)",
+          "desc": "Depth of the belt loop, deck down to underside, which also sets the end drum size and the depth of the side frame. Set it to the Frame height of the conveyor this spur merges onto so the two frames line up. NOT the height off the floor - that is Stand height below.",
+          "default": 0.17,
+          "min": 0.1,
+          "max": 0.6
+        },
+        "fpmUnits": {
+          "type": "boolean",
+          "label": "PLC speed in FPM",
+          "desc": "The unit the PLC commands this conveyor in. On: feet per minute. Off: metres per second. The speed tag is a REAL either way, so switching changes what its value means and never how the program declares it. Set by the scene Units (Scene Properties), which switch every conveyor together, so the Inspector does not show it. A conveyor saved before this switch existed is in metres per second.",
+          "default": true
+        },
+        "speedFpm": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed in feet per minute. Negative runs it backwards. A program can command this through the FPM speed tag below.",
+          "default": 394,
+          "min": -600,
+          "max": 600,
+          "unit": "FPM"
+        },
+        "speed": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed carried along the bed. Negative runs it backwards, which is the ONLY way to reverse flow - rotating the part 180 degrees moves its ends and their splay instead. A program can command this through the speed tag below.",
+          "default": 2,
+          "min": -3,
+          "max": 3,
+          "unit": "m/s"
+        },
+        "accelTime": {
+          "type": "number",
+          "label": "Accel time",
+          "desc": "How long the drive takes to bring the conveyor from stopped up to its rated speed (the speed that reads 30, under Comms > Feedback), like the acceleration time set on a VFD. A smaller change takes proportionally less. 0 starts instantly.",
+          "default": 0.5,
+          "min": 0,
+          "max": 30,
+          "unit": "s"
+        },
+        "decelTime": {
+          "type": "number",
+          "label": "Decel time",
+          "desc": "How long the drive takes to bring the conveyor from rated speed down to a stop. Cargo keeps travelling while it does, so a box stopped at a photo-eye ends up past it. 0 stops instantly.",
+          "default": 0.5,
+          "min": 0,
+          "max": 30,
+          "unit": "s"
+        },
+        "friction": {
+          "type": "number",
+          "label": "Friction",
+          "desc": "Grip between the running surface and a standard carton, the figure a belt datasheet quotes. A smooth PVC belt is about 0.4, a rough-top incline belt about 0.9 and a low-friction plastic modular belt about 0.2, made for product to slide while it accumulates. Bare steel rollers are about 0.4. Other cargo grips by its own friction against the same surface.",
+          "default": 0.59,
+          "min": 0
+        },
+        "angleFrontDeg": {
+          "type": "number",
+          "label": "Front angle (°)",
+          "desc": "Splay angle of the DISCHARGE end face. This is what makes the part a spur: an angled face merges flush onto the side of a straight conveyor instead of butting square against it. 0 leaves the end square.",
+          "default": 30,
+          "min": -60,
+          "max": 60
+        },
+        "angleBackDeg": {
+          "type": "number",
+          "label": "Back angle (°)",
+          "desc": "Splay angle of the INFEED end face. Leave it at 0 for a spur fed square from behind; angle it too when the piece has to sit between two angled neighbours.",
+          "default": 0,
+          "min": -60,
+          "max": 60
+        },
+        "conveyorCount": {
+          "type": "number",
+          "label": "Belt strips",
+          "desc": "How many narrow parallel belt loops fan across the width. More strips give a smoother angled face, since each one is clipped to the splay and the end staircases in steps of one strip.",
+          "default": 20,
+          "min": 1,
+          "max": 20
+        },
+        "beltColor": {
+          "type": "color",
+          "label": "Belt color",
+          "desc": "Tint multiplied into the belt weave. White leaves the fabric at full brightness; a dark tint multiplies it down toward black.",
+          "default": "#ffffff"
+        },
+        "beltTexture": {
+          "type": "enum",
+          "label": "Belt weave",
+          "desc": "Which fabric the belt surface wears. Alternate carries directional arrows that scroll along travel, which is the cheapest way to make flow direction readable in a screenshot.",
+          "default": "standard",
+          "options": [
+            "standard",
+            "alternate"
+          ]
+        },
+        "leftGuard": {
+          "type": "boolean",
+          "label": "Left guard",
+          "desc": "Guard wall down the left side, looking along travel. A real barrier, so turning it off lets cargo leave the bed sideways - which on a spur is usually the point.",
+          "default": true
+        },
+        "rightGuard": {
+          "type": "boolean",
+          "label": "Right guard",
+          "desc": "Guard wall down the right side, looking along travel. A real barrier, so turning it off lets cargo leave the bed sideways.",
+          "default": true
+        },
+        "standHeight": {
+          "type": "number",
+          "label": "Stand height (m)",
+          "desc": "Height of the deck above whatever is beneath it, which sets the leg length. The host fills this in when you drop or snap the conveyor, so the legs reach the floor - or a platform crossing underneath - without you measuring. Pin it by hand when you want a deliberate height.",
+          "default": 2,
+          "min": 0.1,
+          "max": 3,
+          "rest": "surfaceBelow"
+        },
+        "speedTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands surface speed here, replacing the Speed field above, which then shows the live value read-only. Careful: once BOUND this takes over even if no program drives it, and an undriven tag reads 0 - so a half-wired conveyor sits still rather than running at its authored speed.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "speedFpmTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands surface speed here in feet per minute, replacing the Speed field above, which then shows the live value read-only. Once BOUND this takes over even if no program writes it, so an unwritten tag holds the conveyor at 0.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "runTag": {
+          "type": "tag",
+          "label": "Run tag (belt runs while true)",
+          "desc": "Start/stop gate: false forces the speed to 0 whatever the setpoint says. Unlike the speed tag, this only takes effect once a program actually DRIVES it, so binding it alone will not stop the belt.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "runningTag": {
+          "type": "tag",
+          "label": "Running tag (true while moving)",
+          "desc": "Feedback the conveyor publishes for the program to read: true whenever it is actually moving. This is the EFFECTIVE speed, gates included, so a run tag holding it at zero reads false here.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "speedAt30": {
+          "type": "number",
+          "label": "Speed that reads 30 (m/s)",
+          "desc": "The surface speed this conveyor reaches when its drive turns at 30. It scales the velocity tag: running at exactly this speed reads 30.",
+          "default": 2,
+          "min": 0.01,
+          "max": 10
+        },
+        "speedAt30Fpm": {
+          "type": "number",
+          "label": "Speed that reads 30 (FPM)",
+          "desc": "The surface speed, in feet per minute, this conveyor reaches when its drive turns at 30. It scales the velocity tag: running at exactly this speed reads 30.",
+          "default": 394,
+          "min": 1,
+          "max": 2000
+        },
+        "velocityTag": {
+          "type": "tag",
+          "label": "Velocity tag (30 at the speed above)",
+          "desc": "Drive feedback the program reads: the effective speed as a share of the speed at 30 revolutions, times 30. Stopped reads 0, and a run tag holding the conveyor still counts as stopped.",
+          "default": "",
+          "dir": "out",
+          "stType": "REAL"
+        },
+        "inchesPerPulse": {
+          "type": "number",
+          "label": "Travel per pulse (in)",
+          "desc": "How far the surface travels between pulses on the pulse tag. A pulse cannot be finer than one simulation step, so a fast conveyor at a fine pitch needs a higher project simHz.",
+          "default": 1,
+          "min": 0.05,
+          "max": 100
+        },
+        "pulseTag": {
+          "type": "tag",
+          "label": "Pulse tag (one per pitch)",
+          "desc": "An encoder for the program to count: TRUE for one simulation step each time the surface has travelled the inches above, in either direction, and FALSE otherwise.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "encoderTag": {
+          "type": "tag",
+          "label": "Encoder tag (travel)",
+          "desc": "Odometer of surface travel in metres, integrated on sim time: it climbs while the conveyor runs forward and counts back while it reverses. Latch it when a photo-eye sees a box, then act once it has advanced a known distance - the standard way to track product without a sensor at every station.",
+          "default": "",
+          "unit": "m",
+          "dir": "out",
+          "stType": "REAL"
+        }
+      }
+    },
+    {
+      "id": "oip.spur-roller-conveyor",
+      "name": "Spur Roller Conveyor",
+      "category": "Equipment",
+      "params": {
+        "length": {
+          "type": "number",
+          "label": "Length (m)",
+          "desc": "Bed length along travel, measured down the centreline. The end faces stay splayed at the angles below as it grows, so the short side and long side keep their difference.",
+          "default": 2,
+          "min": 0.5
+        },
+        "width": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Bed width across travel. Drag the dot on either side face to resize in the viewport.",
+          "default": 1.524,
+          "min": 0.2
+        },
+        "frameHeight": {
+          "type": "number",
+          "label": "Frame height (m)",
+          "desc": "Depth of the side frame channel below the rollers. Set it to the Frame height of the conveyor this bed butts against so the two frames line up at the joint. The legs shorten or lengthen to meet the frame bottom; the deck height does not move.",
+          "default": 0.17,
+          "min": 0.1,
+          "max": 0.6
+        },
+        "fpmUnits": {
+          "type": "boolean",
+          "label": "PLC speed in FPM",
+          "desc": "The unit the PLC commands this conveyor in. On: feet per minute. Off: metres per second. The speed tag is a REAL either way, so switching changes what its value means and never how the program declares it. Set by the scene Units (Scene Properties), which switch every conveyor together, so the Inspector does not show it. A conveyor saved before this switch existed is in metres per second.",
+          "default": true
+        },
+        "speedFpm": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed in feet per minute. Negative runs it backwards. A program can command this through the FPM speed tag below.",
+          "default": 197,
+          "min": -600,
+          "max": 600,
+          "unit": "FPM"
+        },
+        "speed": {
+          "type": "number",
+          "label": "Speed",
+          "desc": "Surface speed carried along the bed. Negative runs it backwards, which is the ONLY way to reverse flow - rotating the part 180 degrees moves its ends and their splay instead. A program can command this through the speed tag below.",
+          "default": 1,
+          "min": -3,
+          "max": 3,
+          "unit": "m/s"
+        },
+        "accelTime": {
+          "type": "number",
+          "label": "Accel time",
+          "desc": "How long the drive takes to bring the conveyor from stopped up to its rated speed (the speed that reads 30, under Comms > Feedback), like the acceleration time set on a VFD. A smaller change takes proportionally less. 0 starts instantly.",
+          "default": 0.2,
+          "min": 0,
+          "max": 30,
+          "unit": "s"
+        },
+        "decelTime": {
+          "type": "number",
+          "label": "Decel time",
+          "desc": "How long the drive takes to bring the conveyor from rated speed down to a stop. Cargo keeps travelling while it does, so a box stopped at a photo-eye ends up past it. 0 stops instantly.",
+          "default": 0.2,
+          "min": 0,
+          "max": 30,
+          "unit": "s"
+        },
+        "friction": {
+          "type": "number",
+          "label": "Friction",
+          "desc": "Grip between the running surface and a standard carton, the figure a belt datasheet quotes. A smooth PVC belt is about 0.4, a rough-top incline belt about 0.9 and a low-friction plastic modular belt about 0.2, made for product to slide while it accumulates. Bare steel rollers are about 0.4. Other cargo grips by its own friction against the same surface.",
+          "default": 0.42,
+          "min": 0
+        },
+        "angleFrontDeg": {
+          "type": "number",
+          "label": "Front angle (°)",
+          "desc": "Splay angle of the DISCHARGE end face. This is what makes the part a spur: an angled face merges flush onto the side of a straight conveyor instead of butting square against it. 0 leaves the end square.",
+          "default": 30,
+          "min": -60,
+          "max": 60
+        },
+        "angleBackDeg": {
+          "type": "number",
+          "label": "Back angle (°)",
+          "desc": "Splay angle of the INFEED end face. Leave it at 0 for a spur fed square from behind; angle it too when the piece has to sit between two angled neighbours.",
+          "default": 0,
+          "min": -60,
+          "max": 60
+        },
+        "rollerClass": {
+          "type": "enum",
+          "label": "Roller class",
+          "desc": "Duty rating, which sets how thick the rollers are and how closely they are pitched: light 24 mm at 75 mm centres, medium 30 at 100, heavy 40 at 130. Heavier rollers sit further apart, so small product needs the lighter class to stay supported.",
+          "default": "light",
+          "options": [
+            "light",
+            "medium",
+            "heavy"
+          ]
+        },
+        "leftGuard": {
+          "type": "boolean",
+          "label": "Left guard",
+          "desc": "Guard wall down the left side, looking along travel. A real barrier, so turning it off lets cargo leave the bed sideways - which on a spur is usually the point.",
+          "default": true
+        },
+        "rightGuard": {
+          "type": "boolean",
+          "label": "Right guard",
+          "desc": "Guard wall down the right side, looking along travel. A real barrier, so turning it off lets cargo leave the bed sideways.",
+          "default": true
+        },
+        "standHeight": {
+          "type": "number",
+          "label": "Stand height (m)",
+          "desc": "Height of the deck above whatever is beneath it, which sets the leg length. The host fills this in when you drop or snap the conveyor, so the legs reach the floor - or a platform crossing underneath - without you measuring. Pin it by hand when you want a deliberate height.",
+          "default": 2,
+          "min": 0.1,
+          "max": 3,
+          "rest": "surfaceBelow"
+        },
+        "speedTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands surface speed here, replacing the Speed field above, which then shows the live value read-only. Careful: once BOUND this takes over even if no program drives it, and an undriven tag reads 0 - so a half-wired conveyor sits still rather than running at its authored speed.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "speedFpmTag": {
+          "type": "tag",
+          "label": "Speed tag",
+          "desc": "The program commands surface speed here in feet per minute, replacing the Speed field above, which then shows the live value read-only. Once BOUND this takes over even if no program writes it, so an unwritten tag holds the conveyor at 0.",
+          "default": "",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "runTag": {
+          "type": "tag",
+          "label": "Run tag (rollers run while true)",
+          "desc": "Start/stop gate: false forces the speed to 0 whatever the setpoint says. Unlike the speed tag, this only takes effect once a program actually DRIVES it, so binding it alone will not stop the bed.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "runningTag": {
+          "type": "tag",
+          "label": "Running tag (true while moving)",
+          "desc": "Feedback the conveyor publishes for the program to read: true whenever it is actually moving. This is the EFFECTIVE speed, gates included, so a run tag holding it at zero reads false here.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "speedAt30": {
+          "type": "number",
+          "label": "Speed that reads 30 (m/s)",
+          "desc": "The surface speed this conveyor reaches when its drive turns at 30. It scales the velocity tag: running at exactly this speed reads 30.",
+          "default": 1,
+          "min": 0.01,
+          "max": 10
+        },
+        "speedAt30Fpm": {
+          "type": "number",
+          "label": "Speed that reads 30 (FPM)",
+          "desc": "The surface speed, in feet per minute, this conveyor reaches when its drive turns at 30. It scales the velocity tag: running at exactly this speed reads 30.",
+          "default": 197,
+          "min": 1,
+          "max": 2000
+        },
+        "velocityTag": {
+          "type": "tag",
+          "label": "Velocity tag (30 at the speed above)",
+          "desc": "Drive feedback the program reads: the effective speed as a share of the speed at 30 revolutions, times 30. Stopped reads 0, and a run tag holding the conveyor still counts as stopped.",
+          "default": "",
+          "dir": "out",
+          "stType": "REAL"
+        },
+        "inchesPerPulse": {
+          "type": "number",
+          "label": "Travel per pulse (in)",
+          "desc": "How far the surface travels between pulses on the pulse tag. A pulse cannot be finer than one simulation step, so a fast conveyor at a fine pitch needs a higher project simHz.",
+          "default": 1,
+          "min": 0.05,
+          "max": 100
+        },
+        "pulseTag": {
+          "type": "tag",
+          "label": "Pulse tag (one per pitch)",
+          "desc": "An encoder for the program to count: TRUE for one simulation step each time the surface has travelled the inches above, in either direction, and FALSE otherwise.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "encoderTag": {
+          "type": "tag",
+          "label": "Encoder tag (travel)",
+          "desc": "Odometer of surface travel in metres, integrated on sim time: it climbs while the conveyor runs forward and counts back while it reverses. Latch it when a photo-eye sees a box, then act once it has advanced a known distance - the standard way to track product without a sensor at every station.",
+          "default": "",
+          "unit": "m",
+          "dir": "out",
+          "stType": "REAL"
+        }
+      }
+    },
+    {
+      "id": "oip.rack",
+      "name": "Rack",
+      "category": "Structure",
+      "params": {
+        "length": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Rack width along local X, the run of bays. Drag the dot on either end face to resize in the viewport; while auto poles are on that drag snaps to whole bays, so the rack always ends on an upright.",
+          "default": 5.4,
+          "min": 0.5
+        },
+        "depth": {
+          "type": "number",
+          "label": "Depth (m)",
+          "desc": "Frame depth along local Z, front upright to back upright. Real frames are about 1.07 m (42 in), a little less than the pallet, so a 1.22 m (48 in) pallet overhangs each load beam. Drag the dot on either side face to resize in the viewport.",
+          "default": 1.1,
+          "min": 0.4,
+          "max": 4
+        },
+        "numShelves": {
+          "type": "number",
+          "label": "Shelves",
+          "desc": "How many shelf levels sit above the floor. With the spacing below, this is what sets the total height.",
+          "default": 4,
+          "min": 1,
+          "max": 10
+        },
+        "shelfSpacing": {
+          "type": "number",
+          "label": "Shelf spacing (m)",
+          "desc": "Vertical gap between shelf levels. Leave room for the tallest load you mean to store, plus the truck reaching it.",
+          "default": 1.6,
+          "min": 0.5,
+          "max": 3
+        },
+        "enableAutoPoles": {
+          "type": "boolean",
+          "label": "Auto poles",
+          "desc": "Stand an end frame at every bay along the width. Off leaves four corner posts only, which reads as a light shelving unit rather than pallet racking.",
+          "default": true
+        },
+        "poleInterval": {
+          "type": "number",
+          "label": "Bay width (m)",
+          "desc": "Centre-to-centre spacing of the end frames along the width: one bay. Real bays are 2.4-2.7 m (96-108 in), two pallets wide. This is also the step a viewport resize of the width snaps to.",
+          "default": 2.7,
+          "min": 0.5,
+          "max": 4
+        },
+        "shelfColor": {
+          "type": "color",
+          "label": "Shelf color",
+          "desc": "Tint of the shelf decking.",
+          "default": "#8e939a"
+        },
+        "frameColor": {
+          "type": "color",
+          "label": "Frame color",
+          "desc": "Tint of the uprights and the bracing between them.",
+          "default": "#2e5c96"
+        },
+        "beamColor": {
+          "type": "color",
+          "label": "Beam color",
+          "desc": "Tint of the load beams under each shelf.",
+          "default": "#e86a1c"
+        },
+        "aisle": {
+          "type": "string",
+          "label": "Aisle sign",
+          "desc": "Text on a sign across the top of each end frame, such as AISLE 03. Leave it empty for no sign.",
+          "default": ""
+        },
+        "locationLabels": {
+          "type": "boolean",
+          "label": "Location labels",
+          "desc": "A location label on the front and back load beam of every bay at every level: a bar code, the bay number and the level, the way a warehouse system names each slot.",
+          "default": true
+        }
+      }
+    },
+    {
+      "id": "oip.guard-rail",
+      "name": "Guard Rail",
+      "category": "Structure",
+      "params": {
+        "length": {
+          "type": "number",
+          "label": "Length (m)",
+          "desc": "Rail run length along local +X. Posts re-space themselves to stay under 2.4 m apart. Drag the dot on either end face to resize in the viewport.",
+          "default": 4,
+          "min": 0.5
+        },
+        "color": {
+          "type": "color",
+          "label": "Steel color",
+          "desc": "Steel tint of the rails and posts.",
+          "default": "#f2bd0f"
+        },
+        "omitPostStart": {
+          "type": "boolean",
+          "label": "Omit start post",
+          "desc": "Suppress the post at local -X so a snapped neighbour draws the shared one instead. Snapping sets this for you.",
+          "default": false
+        },
+        "omitPostEnd": {
+          "type": "boolean",
+          "label": "Omit end post",
+          "desc": "Suppress the post at local +X so a snapped neighbour draws the shared one instead. Snapping sets this for you.",
+          "default": false
+        }
+      }
+    },
+    {
+      "id": "oip.platform",
+      "name": "Platform",
+      "category": "Structure",
+      "params": {
+        "length": {
+          "type": "number",
+          "label": "Length (m)",
+          "desc": "Deck extent along local X. Drag the dot on either end face to resize in the viewport; the frame, railing and columns reflow to match.",
+          "default": 4,
+          "min": 0.5
+        },
+        "width": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Deck extent along local Z. Drag the dot on either side face to resize in the viewport.",
+          "default": 4,
+          "min": 0.5,
+          "max": 20
+        },
+        "height": {
+          "type": "number",
+          "label": "Height (m)",
+          "desc": "Height of the deck top above whatever it stands on, which is also the column length. The origin is the deck top, so raising the platform regrows the columns to reach the floor rather than leaving them hanging.",
+          "default": 2,
+          "min": 0.3,
+          "max": 8,
+          "rest": "surfaceBelow"
+        },
+        "deckSurface": {
+          "type": "enum",
+          "label": "Deck surface",
+          "desc": "What the deck is made of. Tread plate is the steel walking surface of an access platform; a solid deck is what an equipment platform carrying conveyors or machines has. Only the look changes.",
+          "default": "tread",
+          "options": [
+            "tread",
+            "deck"
+          ]
+        },
+        "color": {
+          "type": "color",
+          "label": "Steel color",
+          "desc": "Steel tint of the frame, columns and railing.",
+          "default": "#f2bd0f"
+        },
+        "showRailings": {
+          "type": "boolean",
+          "label": "Perimeter railing",
+          "desc": "Guard railing around the deck edge. Turning it off removes the barrier a walking pilot leans on, not just the visual.",
+          "default": true
+        },
+        "showSupports": {
+          "type": "boolean",
+          "label": "Middle supports",
+          "desc": "Interior columns under a large deck, in addition to the corner ones. Cosmetic on a small platform, which the corners already carry.",
+          "default": true
+        }
+      }
+    },
+    {
+      "id": "oip.stairs",
+      "name": "Stairs",
+      "category": "Structure",
+      "params": {
+        "numSteps": {
+          "type": "number",
+          "label": "Steps",
+          "desc": "Number of steps in the flight, which is what sets both its rise and its run: the slope is fixed at the standard 0.178 m rise over a 0.28 m tread, so a flight grows along the diagonal rather than getting steeper. Count the steps you need to reach the deck.",
+          "default": 11,
+          "min": 2,
+          "max": 40
+        },
+        "width": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Tread width across local Z.",
+          "default": 1.2,
+          "min": 0.4,
+          "max": 4
+        },
+        "showHandrails": {
+          "type": "boolean",
+          "label": "Handrails",
+          "desc": "Handrails up both sides of the flight.",
+          "default": true
+        },
+        "color": {
+          "type": "color",
+          "label": "Steel color",
+          "desc": "Steel tint of the stringers and rails.",
+          "default": "#f2bd0f"
+        }
+      }
+    },
+    {
+      "id": "oip.floor-marking",
+      "name": "Floor Marking",
+      "category": "Structure",
+      "params": {
+        "length": {
+          "type": "number",
+          "label": "Length (m)",
+          "desc": "Extent along local X. Drag the dot on either end face to resize in the viewport.",
+          "default": 2,
+          "min": 0.1
+        },
+        "width": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Extent along local Z. Drag the dot on either side face to resize in the viewport.",
+          "default": 8,
+          "min": 0.1,
+          "max": 30
+        },
+        "style": {
+          "type": "enum",
+          "label": "Style",
+          "desc": "Which pattern is painted into the rectangle. Border draws an outline only and leaves the interior bare floor; every other style covers the whole footprint.",
+          "default": "hazard",
+          "options": [
+            "solid",
+            "hazard",
+            "dashed",
+            "border",
+            "stripes"
+          ]
+        },
+        "stripeSize": {
+          "type": "number",
+          "label": "Stripe size (m)",
+          "desc": "Width of one stripe or dash (the pattern repeats every two of them). Bands are phased from this part's own origin, so two markings laid end to end won't necessarily line up.",
+          "default": 0.3,
+          "min": 0.05,
+          "max": 2
+        },
+        "borderWidth": {
+          "type": "number",
+          "label": "Border width (m)",
+          "desc": "Width of the border band. Only the Border style draws one.",
+          "default": 0.1,
+          "min": 0.02,
+          "max": 1
+        },
+        "primaryColor": {
+          "type": "color",
+          "label": "Primary color",
+          "desc": "The base colour: the solid fill, the first hazard/stripe band, the dashed field, the border itself. Always painted, and always opaque - the bands are geometry, so partial alpha does nothing here.",
+          "default": "#f2b705"
+        },
+        "secondaryColor": {
+          "type": "color",
+          "label": "Secondary color",
+          "desc": "The alternating colour: the second hazard/stripe band and the dashes. Take its alpha all the way to zero to drop those bands entirely and leave bare floor between the primary ones; any other alpha paints opaque. Unused by Solid and Border.",
+          "default": "#1a1a1a"
+        }
+      }
+    },
+    {
+      "id": "oip.box",
+      "name": "Box",
+      "category": "Products",
+      "params": {
+        "length": {
+          "type": "number",
+          "label": "Length (m)",
+          "desc": "Extent along local X. Drives the collision body as well as the visual, and the box is centred on its origin.",
+          "default": 0.6,
+          "min": 0.1
+        },
+        "width": {
+          "type": "number",
+          "label": "Width (m)",
+          "desc": "Extent along local Z. Drives the collision body as well as the visual.",
+          "default": 0.4,
+          "min": 0.1
+        },
+        "height": {
+          "type": "number",
+          "label": "Height (m)",
+          "desc": "Extent along local Y. Drives the collision body as well as the visual.",
+          "default": 0.4,
+          "min": 0.1
+        },
+        "mass": {
+          "type": "number",
+          "label": "Mass (kg)",
+          "desc": "Physical mass. Heavier cargo is harder for a conveyor to accelerate and pushes lighter cargo out of the way.",
+          "default": 10,
+          "min": 0.5,
+          "max": 100
+        },
+        "color": {
+          "type": "color",
+          "label": "Color",
+          "desc": "Tint over the cardboard texture. White leaves it untinted.",
+          "default": "#ffffff"
+        }
+      }
+    },
+    {
+      "id": "oip.pallet",
+      "name": "Pallet",
+      "category": "Products",
+      "params": {
+        "size": {
+          "type": "enum",
+          "label": "Size",
+          "desc": "Footprint, from the six of ISO 6780; every size is 135 mm tall. The built-in AGV's forks enter the long face of every size, and the short face of the three square sizes too, above the bottom runners.",
+          "default": "1219x1016",
+          "options": [
+            "1219x1016",
+            "1200x800",
+            "1200x1000",
+            "1165x1165",
+            "1100x1100",
+            "1067x1067"
+          ]
+        },
+        "mass": {
+          "type": "number",
+          "label": "Mass (kg)",
+          "desc": "Physical mass of the pallet itself, before anything is stacked on it.",
+          "default": 20,
+          "min": 5,
+          "max": 100
+        },
+        "color": {
+          "type": "color",
+          "label": "Color",
+          "desc": "Tint over the pallet wood texture. White leaves it untinted.",
+          "default": "#ffffff"
+        }
+      }
+    },
+    {
+      "id": "oip.unit-load",
+      "name": "Unit Load",
+      "category": "Products",
+      "params": {
+        "wrapped": {
+          "type": "boolean",
+          "label": "Stretch wrapped",
+          "desc": "The load is stretch-wrapped: at Run it is one rigid body with film round it, and it carries the mark wrapped for anything downstream that checks. Off, its pieces start loose.",
+          "default": false
+        },
+        "loadId": {
+          "type": "string",
+          "label": "Load ID",
+          "desc": "The label on the load (an SSCC, a licence plate). Carried as the mark loadId, so a scanner or a program can tell loads apart.",
+          "default": ""
+        },
+        "courses": {
+          "type": "number",
+          "label": "Courses",
+          "desc": "With no cargo filed under the load, it stacks this many courses of cases on a pallet itself (0.4 m each; three is a full load). 0 = the load is the pallet and cases filed under it.",
+          "default": 3,
+          "min": 0,
+          "max": 4
+        },
+        "caseColor": {
+          "type": "color",
+          "label": "Case color",
+          "desc": "Tint of the cases it stacks itself. White leaves the cardboard untinted.",
+          "default": "#ffffff"
+        },
+        "filmColor": {
+          "type": "color",
+          "label": "Film color",
+          "desc": "Colour of the stretch film: clear film has a faint blue, and loads are also wrapped in white or black film to hide what is inside.",
+          "default": "#dcecf2"
+        },
+        "filmOpacity": {
+          "type": "number",
+          "label": "Film opacity",
+          "desc": "How see-through the film is. Clear film shows the cases through it; white or black film is nearly opaque.",
+          "default": 0.42,
+          "min": 0.1,
+          "max": 1,
+          "unit": "%"
+        }
+      }
+    },
+    {
+      "id": "oip.pallet-dispenser",
+      "name": "Pallet Dispenser",
+      "category": "Equipment",
+      "params": {
+        "capacity": {
+          "type": "number",
+          "label": "Magazine capacity",
+          "desc": "How many empty pallets a full magazine holds: the positions it grips, from the bottom up. A stack loaded taller than this keeps the pallets above the top position, standing loose on the stack.",
+          "default": 10,
+          "min": 1,
+          "max": 10
+        },
+        "autoFeed": {
+          "type": "boolean",
+          "label": "Auto dispense",
+          "desc": "With no program driving the dispense tag, keep the bay stocked: set down the next pallet whenever the last one has been carried clear. Off, it dispenses only on Use.",
+          "default": true
+        },
+        "autoRefill": {
+          "type": "boolean",
+          "label": "Reload by itself when empty",
+          "desc": "Fill an empty magazine with new pallets a few seconds after the last one leaves it and the bay is clear. Off (the default), it waits to be loaded: set a stack of two or more pallets down in it from its open -Z side.",
+          "default": false
+        },
+        "liftSpeed": {
+          "type": "number",
+          "label": "Lift speed (m/s)",
+          "desc": "Carriage speed up and down. A cycle travels about two pallet heights plus the hold gap twice, so this sets most of the cycle time.",
+          "default": 0.15,
+          "min": 0.03,
+          "max": 0.6
+        },
+        "forkTime": {
+          "type": "number",
+          "label": "Fork stroke time (s)",
+          "desc": "How long the forks take to go in or out of a pallet.",
+          "default": 0.6,
+          "min": 0.2,
+          "max": 3
+        },
+        "standHeight": {
+          "type": "number",
+          "label": "Stand height (m)",
+          "desc": "Height of the conveying surface the pallets are set down on. The part stands with its origin on that surface, and its columns run from here down to the floor.",
+          "default": 1,
+          "min": 0.2,
+          "max": 2.5
+        },
+        "frameColor": {
+          "type": "color",
+          "label": "Frame color",
+          "desc": "Paint of the columns, beams, ties and knee braces.",
+          "default": "#24507a"
+        },
+        "guardColor": {
+          "type": "color",
+          "label": "Guide color",
+          "desc": "Paint of the magazine guides and the lift carriage, the parts that move or touch the pallets.",
+          "default": "#f2bd0f"
+        },
+        "palletSize": {
+          "type": "enum",
+          "label": "Pallet size",
+          "desc": "The pallets it holds: its guides and forks are set for this footprint, Fill places pallets of it, and the new pallets it makes are this size.",
+          "default": "1219x1016",
+          "options": [
+            "1219x1016",
+            "1200x800",
+            "1200x1000",
+            "1165x1165",
+            "1100x1100",
+            "1067x1067"
+          ]
+        },
+        "palletColor": {
+          "type": "color",
+          "label": "Pallet color",
+          "desc": "Tint over the pallet wood of the new pallets it is filled with (Pallets at start, Reload by itself). White leaves them untinted, like a hand-placed pallet. A pallet loaded into it keeps its own.",
+          "default": "#ffffff"
+        },
+        "mass": {
+          "type": "number",
+          "label": "Mass (kg)",
+          "desc": "Mass of the new pallets it is filled with. A pallet loaded into it keeps its own.",
+          "default": 25,
+          "min": 1,
+          "max": 200
+        },
+        "dispenseTag": {
+          "type": "tag",
+          "label": "Dispense tag (rising edge)",
+          "desc": "Each rising edge dispenses ONE pallet; holding it true does not dispense more. While a program drives this tag it owns the machine: Use and Auto dispense stand aside.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "enableTag": {
+          "type": "tag",
+          "label": "Enable tag",
+          "desc": "The dispenser moves only while this is true. Drop it and the carriage and forks stop where they are, holding the stack; raise it and the cycle carries on from there. A request while it is false is refused. Wire it to the line running, so a Stop or a trip holds the dispense and a Start finishes it. Until a program drives it, or with it empty, the dispenser is always enabled, so a merely-typed tag does not hold it.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "busyTag": {
+          "type": "tag",
+          "label": "Busy tag",
+          "desc": "True from a dispense request until the stack is lifted clear of the pallet it set down. Hold the conveyor under the magazine until it falls.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "bayTag": {
+          "type": "tag",
+          "label": "Pallet in bay tag",
+          "desc": "The bay photo-eye: true while a pallet stands under the magazine. A line that keeps one pallet waiting dispenses whenever this is false and it is not busy.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "countTag": {
+          "type": "tag",
+          "label": "Dispensed count tag",
+          "desc": "Running total of pallets set down.",
+          "default": "",
+          "dir": "out",
+          "stType": "DINT"
+        },
+        "levelTag": {
+          "type": "tag",
+          "label": "Pallets left tag",
+          "desc": "How many pallets are still in the magazine. Zero means it is parked, waiting to be loaded.",
+          "default": "",
+          "dir": "out",
+          "stType": "INT"
+        }
+      }
+    },
+    {
+      "id": "oip.stretch-wrapper",
+      "name": "Stretch Wrapper",
+      "category": "Equipment",
+      "params": {
+        "rpm": {
+          "type": "number",
+          "label": "Arm speed",
+          "desc": "How fast the arm turns while wrapping. The carriage climbs in step with it, so this sets the cycle time, not the spiral.",
+          "default": 18,
+          "min": 4,
+          "max": 30,
+          "unit": "rpm"
+        },
+        "overlap": {
+          "type": "number",
+          "label": "Film overlap",
+          "desc": "How much of each band the next turn of the spiral covers. The carriage climbs with the arm, one film width less this per turn, so the overlap holds at any arm speed. Wrapped loads are usually run at 50-70%.",
+          "default": 60,
+          "min": 0,
+          "max": 90,
+          "unit": "%"
+        },
+        "liftSpeed": {
+          "type": "number",
+          "label": "Carriage speed (m/s)",
+          "desc": "How fast the film carriage travels when it is not climbing the spiral: it drops to the base and comes back down from the top at twice this.",
+          "default": 0.15,
+          "min": 0.03,
+          "max": 0.6
+        },
+        "baseTurns": {
+          "type": "number",
+          "label": "Base wraps",
+          "desc": "Turns at the bottom before the climb: the film run down over the pallet boards is what ties the load to its pallet.",
+          "default": 1.5,
+          "min": 0,
+          "max": 6
+        },
+        "topTurns": {
+          "type": "number",
+          "label": "Top wraps",
+          "desc": "Turns at the top of the load before the carriage comes back down.",
+          "default": 1.5,
+          "min": 0,
+          "max": 6
+        },
+        "autoWrap": {
+          "type": "boolean",
+          "label": "Auto wrap",
+          "desc": "With no program driving the start tag, wrap a load once it has stood in the station for a moment, and only once. Off, it wraps only on Use.",
+          "default": true
+        },
+        "standHeight": {
+          "type": "number",
+          "label": "Stand height (m)",
+          "desc": "Height of the conveying surface the load stands on. The part stands with its origin on that surface, and its column runs from here down to the floor.",
+          "default": 1,
+          "min": 0.2,
+          "max": 2.5
+        },
+        "frameColor": {
+          "type": "color",
+          "label": "Frame color",
+          "desc": "Paint of the column, the boom and its knee brace.",
+          "default": "#24507a"
+        },
+        "armColor": {
+          "type": "color",
+          "label": "Arm color",
+          "desc": "Paint of the rotating arm and its mast, the parts that sweep round the load.",
+          "default": "#f2bd0f"
+        },
+        "showBeam": {
+          "type": "boolean",
+          "label": "Show beams",
+          "desc": "Draw the station eye and the film carriage eye. Off by default: the carriage eye turns with the arm.",
+          "default": false
+        },
+        "startTag": {
+          "type": "tag",
+          "label": "Start tag (rising edge)",
+          "desc": "Each rising edge starts ONE wrap cycle on the load in the station; holding it true does not wrap again. While a program drives this tag it owns the machine: Use and Auto wrap stand aside.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "enableTag": {
+          "type": "tag",
+          "label": "Enable tag",
+          "desc": "The wrapper moves only while this is true. Drop it and the arm brakes to a stop where it is and the carriage holds; raise it and the cycle carries on from there. A start while it is false is ignored. Wire it to the line running, so a Stop or a trip holds the wrap and a Start finishes it. Until a program drives it, or with it empty, the wrapper is always enabled, so a merely-typed tag does not hold it.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "busyTag": {
+          "type": "tag",
+          "label": "Busy tag",
+          "desc": "True from a start until the arm has parked beside the column. Hold the conveyor while it is true: the arm is turning around the load.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "doneTag": {
+          "type": "tag",
+          "label": "Done tag",
+          "desc": "True once the load in the station is wrapped and the arm is parked, until the load leaves. Carry on down the line when it goes true.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "inPositionTag": {
+          "type": "tag",
+          "label": "In position tag",
+          "desc": "The station eye, across the line just downstream of the wrap axis: true while a load blocks it. Stop the conveyor on it and the load comes to rest centred under the arm.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        }
+      }
+    },
+    {
+      "id": "oip.fence",
+      "name": "Fence",
+      "category": "Structure",
+      "params": {
+        "length": {
+          "type": "number",
+          "label": "Length (m)",
+          "desc": "Fence run length along local +X. Drag the dot on either end face to resize in the viewport; short runs are legitimate filler panels where a guard line meets a machine.",
+          "default": 4,
+          "min": 0.2
+        },
+        "height": {
+          "type": "number",
+          "label": "Height (m)",
+          "desc": "Panel height. The base stays on the floor and the top face moves, so the viewport dot drags the top.",
+          "default": 2,
+          "min": 0.5,
+          "max": 4
+        },
+        "postColor": {
+          "type": "color",
+          "label": "Post color",
+          "desc": "Post tint.",
+          "default": "#f2bd0f"
+        },
+        "meshColor": {
+          "type": "color",
+          "label": "Mesh color",
+          "desc": "Tint of the frame and the wire panel it holds.",
+          "default": "#0d0d0d"
+        },
+        "omitPostStart": {
+          "type": "boolean",
+          "label": "Omit start post",
+          "desc": "Suppress the post at local -X so a snapped neighbour draws the shared one instead. Snapping sets this for you.",
+          "default": false
+        },
+        "omitPostEnd": {
+          "type": "boolean",
+          "label": "Omit end post",
+          "desc": "Suppress the post at local +X so a snapped neighbour draws the shared one instead. Snapping sets this for you.",
+          "default": false
+        }
+      }
+    },
+    {
+      "id": "oip.gantry",
+      "name": "Gantry",
+      "category": "Equipment",
+      "params": {
+        "frameLength": {
+          "type": "number",
+          "label": "Frame length (m)",
+          "desc": "Span of the frame along its X axis, which is also the travel available to the carriage. The legs, rails and bridge all stretch with it.",
+          "default": 4,
+          "min": 0.5,
+          "max": 20
+        },
+        "frameWidth": {
+          "type": "number",
+          "label": "Frame width (m)",
+          "desc": "Span across the frame in Y, the second axis of travel.",
+          "default": 2,
+          "min": 0.3,
+          "max": 10
+        },
+        "frameHeight": {
+          "type": "number",
+          "label": "Frame height (m)",
+          "desc": "Height of the frame, which sets how far the tool can be lowered on the lift axis.",
+          "default": 1,
+          "min": 0.5,
+          "max": 10
+        },
+        "speed": {
+          "type": "number",
+          "label": "Motion speed (m/s)",
+          "desc": "Top speed of a move, reached by the axis with the farthest to go. The other two are slowed in proportion so all three arrive together and the tool runs a straight line.",
+          "default": 1,
+          "min": 0.1,
+          "max": 10
+        },
+        "accel": {
+          "type": "number",
+          "label": "Acceleration (m/s²)",
+          "desc": "How hard the axes ramp up to speed and brake to a stop, for the axis with the farthest to go. Lower it for a heavier or more delicate load; a short move may never reach top speed at all.",
+          "default": 5,
+          "min": 0.1,
+          "max": 50
+        },
+        "vacuumOn": {
+          "type": "boolean",
+          "label": "Vacuum on (idle grip + LED)",
+          "desc": "Authored resting state of the vacuum: it seeds the grip and lights the status LED while the gantry sits idle. Once a vacuum tag is named, that tag takes over.",
+          "default": false
+        },
+        "mode": {
+          "type": "enum",
+          "label": "Mode",
+          "desc": "How the program drives the gantry. Waypoints: set the command tag to a row of the taught table and pulse Execute, like drives with stored positions. Position: write the X, Y and Z targets and pulse Execute; the gantry plans one coordinated straight-line move, like a gantry with its own controller. Follow setpoints: hold Execute and stream each axis set position every scan, for a program that runs its own motion control (an MC_MoveAbsolute per axis); the program does the coordinating.",
+          "default": "waypoints",
+          "options": [
+            "waypoints",
+            "position",
+            "follow"
+          ]
+        },
+        "enableTag": {
+          "type": "tag",
+          "label": "Enable tag",
+          "desc": "Powers the drives. Drop it and the gantry stops where it is and abandons its move; raise it and it waits for the next Execute. Wire it to the cell being safe to work in. Until a program drives it, or with it empty, the drives are always on, so a merely-typed tag does not hold them.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "commandTag": {
+          "type": "tag",
+          "label": "Command tag (0 = home, 1+ = waypoint)",
+          "desc": "Which row of the waypoint table to move to, as an index: 0 is home, 1 the second row and so on. Set it BEFORE pulsing execute. An index past the end of the table is ignored, and the arm stays put rather than guessing.",
+          "default": "",
+          "dir": "in",
+          "stType": "INT"
+        },
+        "targetXTag": {
+          "type": "tag",
+          "label": "Target X tag",
+          "desc": "Where to move along the length, in metres from the frame centre. Position mode: set all three targets BEFORE pulsing execute; outside the frame, the gantry drives toward the end of the frame, stops short of it and raises Fault. Follow mode: read every scan; outside the frame, that axis parks at the end of the frame.",
+          "default": "",
+          "unit": "m",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "targetYTag": {
+          "type": "tag",
+          "label": "Target Y tag",
+          "desc": "Where to move across the width, in metres from the frame centre.",
+          "default": "",
+          "unit": "m",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "targetZTag": {
+          "type": "tag",
+          "label": "Target Z tag (down)",
+          "desc": "How far to lower the tool, in metres below its raised position: 0 is fully up.",
+          "default": "",
+          "unit": "m",
+          "dir": "in",
+          "stType": "REAL"
+        },
+        "executeTag": {
+          "type": "tag",
+          "label": "Execute tag",
+          "desc": "Pulse this false-to-true to start a move. It is edge-triggered, so holding it true does NOT repeat - drop it and raise it again for each move. In follow mode, hold it true for as long as the gantry should track the targets.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "doneTag": {
+          "type": "tag",
+          "label": "Done tag",
+          "desc": "Handshake back to the program: true whenever the gantry is parked and ready for the next command. Wait for it before pulsing execute again, or the edge lands mid-move and is dropped. In follow mode: true while all three axes sit on their setpoints.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "faultTag": {
+          "type": "tag",
+          "label": "Fault tag",
+          "desc": "True when the last move was refused (the drives not enabled) or ended in a fault (a target past the frame: the gantry stops short of the frame end). The next Execute clears it, once the axes are still.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "actualXTag": {
+          "type": "tag",
+          "label": "Actual X tag",
+          "desc": "Where the X axis is now, every scan, in the same metres as the target.",
+          "default": "",
+          "unit": "m",
+          "dir": "out",
+          "stType": "REAL"
+        },
+        "actualYTag": {
+          "type": "tag",
+          "label": "Actual Y tag",
+          "desc": "Where the Y axis is now.",
+          "default": "",
+          "unit": "m",
+          "dir": "out",
+          "stType": "REAL"
+        },
+        "actualZTag": {
+          "type": "tag",
+          "label": "Actual Z tag (down)",
+          "desc": "How far the tool is lowered now.",
+          "default": "",
+          "unit": "m",
+          "dir": "out",
+          "stType": "REAL"
+        },
+        "gripperTag": {
+          "type": "tag",
+          "label": "Vacuum tag",
+          "desc": "Grip or release the load. Read continuously rather than on an edge, so hold it true for the whole carry and drop it only once the load is where it belongs.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "waypoints": {
+          "type": "numberList",
+          "label": "Waypoints (row 0 = home)",
+          "desc": "Positions in frame-local metres, one row each: x along the length, y across, and z the lift measured DOWNWARD (larger is lower). Row 0 is home and the command tag picks a row. A value outside the frame parks at its limit.",
+          "default": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              -1.4,
+              0.6,
+              0.7
+            ],
+            [
+              1.4,
+              -0.6,
+              0.7
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "oip.agv",
+      "name": "AGV",
+      "category": "Equipment",
+      "params": {
+        "driveSpeed": {
+          "type": "number",
+          "label": "Drive speed (m/s)",
+          "desc": "How fast the truck travels between waypoints.",
+          "default": 1,
+          "min": 0.1,
+          "max": 5
+        },
+        "turnSpeed": {
+          "type": "number",
+          "label": "Turn speed (°/s)",
+          "desc": "How fast it pivots on the spot. Every move turns to face the target, drives, then turns to the waypoint heading, so this sets much of the cycle time on short hops.",
+          "default": 90,
+          "min": 10,
+          "max": 360
+        },
+        "liftSpeed": {
+          "type": "number",
+          "label": "Fork lift speed (m/s)",
+          "desc": "How fast the tines raise and lower to the height the waypoint asks for.",
+          "default": 1.2,
+          "min": 0.1,
+          "max": 5
+        },
+        "maxLiftHeight": {
+          "type": "number",
+          "label": "Max fork height (m)",
+          "desc": "Ceiling on the tines, whatever a waypoint asks for. Set it to the top beam of the racking the truck actually serves.",
+          "default": 3,
+          "min": 0.1,
+          "max": 8
+        },
+        "forkSpread": {
+          "type": "number",
+          "label": "Fork spread",
+          "desc": "Blade centre to centre, set the way a fork positioner is set for the pallets a site handles. Between 210-490 mm the forks enter every face of every pallet size. At the default 730 mm they enter the long face of every size and the short face of 1165 x 1165 mm, 1100 x 1100 mm, 1067 x 1067 mm. A short face is entered over the bottom runners, about 3 cm above what the pallet stands on. Taking a pallet through a face the blades do not fit is reported on the truck.",
+          "default": 0.73,
+          "min": 0.25,
+          "max": 0.9,
+          "unit": "m"
+        },
+        "reverseRange": {
+          "type": "number",
+          "label": "Back-out range",
+          "desc": "How close a target behind the truck, at about the heading it already holds, has to be for it to back out instead of turning round, the way tines withdraw from a rack bay. 0 means it always turns.",
+          "default": 3,
+          "min": 0,
+          "max": 20,
+          "unit": "m"
+        },
+        "commandTag": {
+          "type": "tag",
+          "label": "Command tag (0 = home, 1+ = waypoint)",
+          "desc": "Which row of the waypoint table to drive to, as an index: 0 is home, 1 the second row and so on. Set it BEFORE pulsing execute. An index past the end of the table is ignored, and the truck stays put rather than guessing.",
+          "default": "",
+          "dir": "in",
+          "stType": "INT"
+        },
+        "executeTag": {
+          "type": "tag",
+          "label": "Execute tag (rising edge runs the move)",
+          "desc": "Pulse this false-to-true to start the move. It is edge-triggered, so holding it true does NOT repeat - drop it and raise it again for each move. An edge arriving mid-move is ignored.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "doneTag": {
+          "type": "tag",
+          "label": "Done tag (true while idle)",
+          "desc": "True while the truck is parked and ready. It drops for every move it accepts, even one that finishes at once, and comes back once the move is over and Execute is released (or half a second has passed), so wait for it before pulsing Execute again.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "forkTag": {
+          "type": "tag",
+          "label": "Fork tag (true grabs, false releases)",
+          "desc": "Clamp or release whatever is sitting on the tines. It is read continuously rather than on an edge, so hold it true for the whole carry and drop it only once the load is where it belongs.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        },
+        "waypoints": {
+          "type": "numberList",
+          "label": "Waypoints (row 0 = home)",
+          "desc": "The stops this truck knows, one row each: X and Z in the scene, the heading, and the tine height. Row 0 is home and the command tag picks a row. The tines move while it drives, except on a back-out, where they reach height first.",
+          "default": [
+            [
+              0,
+              0,
+              0,
+              0
+            ],
+            [
+              4,
+              0,
+              0,
+              1
+            ],
+            [
+              4,
+              4,
+              90,
+              1
+            ],
+            [
+              0,
+              4,
+              180,
+              0
+            ]
+          ]
+        }
+      }
+    },
+    {
+      "id": "oip.barcode-scanner",
+      "name": "Barcode Scanner",
+      "category": "Devices",
+      "params": {
+        "width": {
+          "type": "number",
+          "label": "Clear width (m)",
+          "desc": "The gap between the two columns, across the direction of travel. Wider than the conveyor, so the columns stand clear of its legs.",
+          "default": 1,
+          "min": 0.4,
+          "max": 3
+        },
+        "surfaceHeight": {
+          "type": "number",
+          "label": "Conveyor height (m)",
+          "desc": "Height of the conveying surface under the arch: the bottom of the read zone.",
+          "default": 0.8,
+          "min": 0.2,
+          "max": 2
+        },
+        "clearance": {
+          "type": "number",
+          "label": "Clearance (m)",
+          "desc": "From the conveying surface up to the scanner head. The tallest load must pass under it; the read zone fills that height.",
+          "default": 0.6,
+          "min": 0.2,
+          "max": 2
+        },
+        "readDepth": {
+          "type": "number",
+          "label": "Read depth (m)",
+          "desc": "How far along the direction of travel (local Z) the read window reaches, centred under the head. A case is read as it crosses the scan line once its CENTRE is in the window, and the scan window lights while one is.",
+          "default": 0.5,
+          "min": 0.1,
+          "max": 2
+        },
+        "codeMark": {
+          "type": "string",
+          "label": "Code attribute",
+          "desc": "The product attribute the label carries, read off each case into the code tag: a number, or digits in text. A case without it reads 0.",
+          "default": "code"
+        },
+        "showBeam": {
+          "type": "boolean",
+          "label": "Show scan line",
+          "desc": "Draw the scan line across the conveyor. A viewing aid only.",
+          "default": false
+        },
+        "beamColor": {
+          "type": "color",
+          "label": "Beam color",
+          "desc": "Paint of the crossbeam the head hangs from.",
+          "default": "#f2bd0f"
+        },
+        "readTag": {
+          "type": "tag",
+          "label": "Good read tag (pulse)",
+          "desc": "Goes true for a quarter of a second each time a case is read. Take its rising edge to count or to act on a read.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "countTag": {
+          "type": "tag",
+          "label": "Read count tag",
+          "desc": "Running total of cases read this run. It only ever climbs.",
+          "default": "",
+          "dir": "out",
+          "stType": "DINT"
+        },
+        "codeTag": {
+          "type": "tag",
+          "label": "Code tag (the last code read)",
+          "desc": "The code on the label of the last case read, set on the same scan the good-read pulse rises. It holds until the next read.",
+          "default": "",
+          "dir": "out",
+          "stType": "DINT"
+        }
+      }
+    },
+    {
+      "id": "oip.bollards",
+      "name": "Safety Bollards",
+      "category": "Structure",
+      "params": {
+        "count": {
+          "type": "number",
+          "label": "Posts",
+          "desc": "How many posts in the row. They run along local X from the part origin.",
+          "default": 5,
+          "min": 1,
+          "max": 16
+        },
+        "spacing": {
+          "type": "number",
+          "label": "Spacing (m)",
+          "desc": "Centre-to-centre gap between posts. Set it narrower than whatever you mean to keep out, since the posts stop nothing that fits between them.",
+          "default": 1.2,
+          "min": 0.4,
+          "max": 3
+        },
+        "height": {
+          "type": "number",
+          "label": "Height (m)",
+          "desc": "Height of each post above the floor.",
+          "default": 0.9,
+          "min": 0.4,
+          "max": 1.5
+        },
+        "radius": {
+          "type": "number",
+          "label": "Post radius (m)",
+          "desc": "Thickness of each post.",
+          "default": 0.06,
+          "min": 0.03,
+          "max": 0.2
+        },
+        "color": {
+          "type": "color",
+          "label": "Color",
+          "desc": "Post tint.",
+          "default": "#f2b90c"
+        }
+      }
+    },
+    {
+      "id": "oip.light-curtain",
+      "name": "Light Curtain",
+      "category": "Devices",
+      "params": {
+        "width": {
+          "type": "number",
+          "label": "Protected width (m)",
+          "desc": "The clear gap between the two columns, which the beams span. The part origin is its centre, on the floor.",
+          "default": 1.4,
+          "min": 0.3,
+          "max": 4
+        },
+        "fieldBottom": {
+          "type": "number",
+          "label": "Lowest beam (m)",
+          "desc": "Height of the bottom beam above the floor. Where a conveyor passes through, put it just above the conveying surface: nothing can pass below that.",
+          "default": 0.3,
+          "min": 0,
+          "max": 2
+        },
+        "fieldHeight": {
+          "type": "number",
+          "label": "Beam span (m)",
+          "desc": "From the lowest beam to the highest. The four beams are spread evenly across it, and the columns stand 0.1 m above the top one.",
+          "default": 0.9,
+          "min": 0.2,
+          "max": 2
+        },
+        "showBeam": {
+          "type": "boolean",
+          "label": "Show beams",
+          "desc": "Draw the beams in the viewport. A viewing aid only - hiding them does not change what the curtain sees.",
+          "default": true
+        },
+        "tag": {
+          "type": "tag",
+          "label": "OSSD tag (true = clear)",
+          "desc": "The safety output: true while every beam is clear, false while anything interrupts one. Muting a load through is the program's job: feed this and the muting sensors to a muting block, and its output into the run permit.",
+          "default": "",
+          "dir": "out",
+          "stType": "BOOL"
+        },
+        "mutingLampTag": {
+          "type": "tag",
+          "label": "Muting lamp tag",
+          "desc": "Optional: the program lights the muting lamp on the emitter's cap with this while it is muting the curtain.",
+          "default": "",
+          "dir": "in",
+          "stType": "BOOL"
+        }
+      }
+    },
+    {
+      "id": "oip.shape",
+      "name": "Shape",
+      "category": "Structure",
+      "params": {
+        "shape": {
+          "type": "enum",
+          "label": "Shape",
+          "desc": "Which primitive is built. All four are sized by the same three dimensions below, so switching kind keeps the footprint you already set.",
+          "default": "box",
+          "options": [
+            "box",
+            "cylinder",
+            "cone",
+            "ramp"
+          ]
+        },
+        "length": {
+          "type": "number",
+          "label": "Length X (m)",
+          "desc": "Extent along local X, with a viewport dot on each end face. A round shape takes its X radius from half of this, so a cylinder whose length and width differ is an elliptical one.",
+          "default": 1,
+          "min": 0.02,
+          "max": 40
+        },
+        "width": {
+          "type": "number",
+          "label": "Width Z (m)",
+          "desc": "Extent along local Z, with a viewport dot on each side face. A round shape takes its Z radius from half of this.",
+          "default": 1,
+          "min": 0.02,
+          "max": 40
+        },
+        "height": {
+          "type": "number",
+          "label": "Height Y (m)",
+          "desc": "Extent along local Y. The shape is BASE-ORIGIN, sitting on local y=0, so it seats flat on the floor or a deck and grows upward.",
+          "default": 1,
+          "min": 0.02,
+          "max": 20
+        },
+        "sides": {
+          "type": "number",
+          "label": "Sides",
+          "desc": "How many facets go around a cylinder or cone. No effect on a box or a ramp.",
+          "default": 20,
+          "min": 3,
+          "max": 48
+        },
+        "color": {
+          "type": "color",
+          "label": "Color",
+          "desc": "Surface tint.",
+          "default": "#9aa3ad"
+        },
+        "solid": {
+          "type": "boolean",
+          "label": "Solid (blocks cargo)",
+          "desc": "Give the shape a collision hull, so cargo and a walking pilot are stopped by it. The hull is exact for all four shapes, which is what lets a ramp actually be walked up rather than colliding as a full block. Clear it for pure massing or decoration.",
+          "default": true
+        }
+      }
+    }
+  ]
+}

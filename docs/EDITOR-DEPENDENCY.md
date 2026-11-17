@@ -1,11 +1,7 @@
-# Custom OpenPLC dependency
+# OpenPLC shared editor dependency
 
-Maintainer editor source HEAD: `882ec0db55120f51fb549a94ebc3541b86886aac`.
+Public source: https://github.com/HellsegaMIMIC/openplc-editor-dsh at v2026.11.17-preview.1 (6cebf8baa24777f7757a3ba1e63c525fc480e2fe). Place that checkout at software/openplc-editor-zh and follow its dependency/build instructions.
 
-editor-working-tree.patch records selected current uncommitted changes only. It is not a complete fork or reproducible r4 distribution, and applicability to an upstream checkout has not been verified.
+The PLC tool adapter builds scripts/build-agent-tools.cjs using scripts/agent-tools-sources.json and the native source/dependencies. Installing an editor executable alone does not provide this source worker. Legacy candidate paths and FUXA permission checks also use the source checkout, pinned TypeScript and JSDOM. Missing or mismatched prerequisites fail closed.
 
-Candidate rename/import still uses software/openplc-editor-zh/src/cli/commands/agent-candidate.ts, agent-candidate-worker.cjs, local TypeScript, and a legacy r3 executable location. FUXA permission checks also require pinned JSDOM and TypeScript in that source checkout. Missing prerequisites must reject operations; do not bypass the checks.
-
-The native r4 editor additionally contains committed custom CLI functionality. Its complete corresponding source/build instructions must be published separately before claiming a reproducible integrated editor. Upstream executable 4.3.2 alone is insufficient.
-
-This package contains the plugin/controller source and no editor executable, node_modules or third-party scene assets. Compile/run, candidate editing and native permission validation remain dependent on the configured maintainer toolchain.
+The public portable editor is an editing preview: it does not bundle the complete compiler/Runtime toolchain. OpenPLC Runtime and MSYS remain separate dependencies. This source release does not claim a clean-machine integrated installation or native Runtime acceptance.

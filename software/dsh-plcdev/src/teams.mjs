@@ -93,9 +93,9 @@ export function createTeamIntegration({ ctx, bridge, conversations }) {
         (scope.model && currentRoute(exec.agent).model !== scope.model))
       throw new Error('本次请求的工程绑定或会话已变化；旧调用未执行，原任务保留原工程。');
   }
-  async function authority(agent) {
+  async function authority(agent, {register=true}={}) {
     const m = live(agent), root = rootActor(m);
-    if (m.role === 'lead') { registered.set(agent, root); return root; }
+    if (m.role === 'lead') { if(register)registered.set(agent, root); return root; }
     const state = await call('snapshot', root);
     matchingWorkflow(agent, state.task);
     const slot = state.task?.teamAnalysis?.members.find(s => s.name === m.name);
@@ -105,8 +105,7 @@ export function createTeamIntegration({ ctx, bridge, conversations }) {
     const actor = { ...root, sessionId: agent.session.id, createdAt: agent.session.header.createdAt, role: slot.role, name: slot.name };
     if (slot.sessionId && (slot.sessionId !== actor.sessionId || slot.createdAt !== actor.createdAt)) throw new Error('该角色已绑定另一个原生子会话。');
     live(agent);
-    await call('member', actor);
-    registered.set(agent, actor);
+    if(register){await call('member', actor);registered.set(agent, actor);}
     return actor;
   }
   async function stateFor(agent) {
@@ -535,8 +534,11 @@ export function createTeamIntegration({ ctx, bridge, conversations }) {
     try {
       const m = live(exec.agent), actor = registered.get(exec.agent);
       if (!actor || actor.rootSessionId !== m.root.session.id || (m.role !== 'lead' && actor.name !== m.name)) throw new Error('团队工具尚未核对真实角色登记。');
+      const participation=conversations.snapshot(actor.rootSessionId);
+      if(!participation.projectId||participation.participation?.enabled===false)throw new Error('当前会话未开启 PLCdev，请先选择工程。');
       if (!allowedTools(exec.agent)[actor.role]?.includes(exec.name)) throw new Error('此团队角色只允许自己的受控专业工具；不能执行通用文件、Shell、其他工程或原生管理工具。');
       if (leadMutations.has(exec.name)) requestScope(exec, exec.name);
+      if(nameIsTeam)conversations.lockParticipation?.(actor.rootSessionId,{projectId:participation.projectId,version:participation.version});
     } catch (error) { return error.message; }
   }
   const info = (model = TEAM_MODEL) => ({ provider: TEAM_PROVIDER, id: model, name: model === TEAM_GENERATION_MODEL ? 'DeepSeek · PLCdev 三端生成团队' : 'DeepSeek · PLCdev 原生团队', inputModalities: ['text'], description: model === TEAM_GENERATION_MODEL ? '首批范围：PLC 批次初始目标、FUXA 原生页面、OIP 既有输送带速度；固定版本独立产物与人工审阅。' : '原生 Lead / PLC / HMI，固定工程版本，仅分析。' });
@@ -631,5 +633,16 @@ export function createTeamIntegration({ ctx, bridge, conversations }) {
       yield {type:'finish',reason:{kind:blocks.some(b=>b.type==='tool-call')?'tool-calls':choice.finish_reason==='length'?'max-tokens':'stop'}};
     },
   };
-  return { tools, guard, adapter, stateFor, authority };
+  async function toolNamesFor({agent,modelSelection}) {
+    if(modelSelection?.provider!==TEAM_PROVIDER || ![TEAM_MODEL,TEAM_GENERATION_MODEL].includes(modelSelection?.model))return [];
+    const same=()=>{const route=currentRoute(agent);return route?.provider===modelSelection.provider&&route?.model===modelSelection.model;};
+    if(!same())return [];
+    try {
+      const actor=await authority(agent,{register:false});
+      const binding=conversations.snapshot(actor.rootSessionId);
+      if(!binding.projectId||binding.participation?.enabled===false)return [];
+      return same() ? [...(allowedTools(agent)[actor.role]??[])] : [];
+    } catch {return [];}
+  }
+  return { tools, guard, adapter, stateFor, authority, toolNamesFor };
 }

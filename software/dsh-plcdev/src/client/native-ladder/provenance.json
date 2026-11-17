@@ -1,0 +1,146 @@
+{
+  "source": "OpenPLC Editor GraphicalDiffViewer",
+  "license": "GPL-3.0",
+  "sourceUnmodified": true,
+  "readOnly": true,
+  "transforms": [
+    "Read-only provider port",
+    "Chinese labels",
+    "Native LD edge diff map forwarded",
+    "Primitive contact/coil variant included in native fingerprint"
+  ],
+  "sources": [
+    {
+      "path": "software/openplc-editor-zh/src/backend/shared/utils/graphical-diff.ts",
+      "sha256": "63f052dd317ffcfb097e4e70a2959d4478509ee7c3b3f4395468cc589f1f8bc9"
+    },
+    {
+      "path": "software/dsh-plcdev/src/client/native-ladder/provider.tsx",
+      "sha256": "e2f9fd6f9be955debafe4102b938324b4ddc20b20d5c6f9f04cbc0ec20625544"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/utils/cn.ts",
+      "sha256": "d537166882c7e66d137f194b43bff7704f09ee19e525ec957302608f5698a555"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/diff/constants.ts",
+      "sha256": "fcd9a3728e8787bb369d0fdb32b3bfab964aff78dd9f9cd63f4a126070664eda"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/diff/diff-wrapper.tsx",
+      "sha256": "e3602d6fb6429f63d5b06ef79c7ada1984d1409d2d389ba311e50de970c244ff"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/utils/graphical/in-out-pin-rules.ts",
+      "sha256": "db2df0b5cd5ccb3892d4e94d08927156190a8a495e22c6f5b2ccacaaca72bfbc"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/in-out-pin-marker.tsx",
+      "sha256": "438c2e29411526f1cbef917157947346a99934b59ef5739671fa820fdee8c0e4"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/utils/graphical/fbd-variable-width.ts",
+      "sha256": "84a8c538b514ec3f4f230f9e375bf373f08f982b3e4595823ab3b320b03fe0ad"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/utils/graphical/types.ts",
+      "sha256": "6ccb681de860843f24609983db402c71177caa153c7795c40bca15f3c7592902"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/fbd/utils/constants.tsx",
+      "sha256": "437c7fb93bdc55da92060860374d7615b1e3666df57499c3d8ad153dba5df93f"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/fbd/block-visual.tsx",
+      "sha256": "bb4c2bec26a0e2f6e53758a49f112d49cbdc66b35429f73ebaef2afbd590d96b"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/fbd/comment-visual.tsx",
+      "sha256": "cb359e42080d5f39ffde9b0c87f190197be9d45bd0ec11d8a5272767ced50ef0"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/fbd/svg/connector-svg.tsx",
+      "sha256": "d0431faae5c20027935dab8799f80f0e07f0d757ed0f015ee1fa4733da11ad5c"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/fbd/svg/continuation-svg.tsx",
+      "sha256": "ce910cc5318d6d5ad59b138673dd07a76e4d7279a26ec797b8df1a5b79491fa5"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/fbd/connection-visual.tsx",
+      "sha256": "625421e7a6e61ded3760b24eaa36cd907cf39060ec96b8f50a989d6f6d2112c2"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/fbd/utils/variable-size.ts",
+      "sha256": "111fe773e277a96bd5d987c024b2b98a5d24aeaa914b43d94309a822c8fdcb9c"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/fbd/variable-visual.tsx",
+      "sha256": "e8e479caac70b52559155bd57084c6dde88df1946e2ee25ef7d9085229a1762e"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/diff/fbd-nodes.tsx",
+      "sha256": "beea23c8e8ed0d75e199f1755fca138584e69635938313a3fcf7b224469cefdd"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/assets/icons/flow/Placeholder.tsx",
+      "sha256": "221148ac37f8b3a2159a78fbeb379b5ba093ba8c2bd8401559c354113624c381"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/assets/icons/flow/Coil.tsx",
+      "sha256": "5a20964ab8bcf0a248e2904a1a54747a89c1fe9e8f6c9b8832ebdf4169899380"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/assets/icons/flow/Contact.tsx",
+      "sha256": "a5a3a1d7a44ad679bb44582abdcb7f47a3de8adad31c95afc4c1c27f4210ba93"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/ladder/utils/constants.tsx",
+      "sha256": "f15825399c6eb5affef19e35bfb847646f62d0b48525aea153c8172c77ae4460"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/ladder/block-visual.tsx",
+      "sha256": "bb4c2bec26a0e2f6e53758a49f112d49cbdc66b35429f73ebaef2afbd590d96b"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/ladder/coil-visual.tsx",
+      "sha256": "5d55084ed92e26bc9a8a237172a9bbe41570f4a3bb1f8e8790187e1d24cc0893"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/ladder/contact-visual.tsx",
+      "sha256": "d3ed22e5e28e07ae3b8bc736f692778edd322a6011bbbebbcf18997960792749"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/ladder/variable-visual.tsx",
+      "sha256": "68b6641da6eea752883d349b1ef6e9fd792e31b10ba15ed5c1a7c0a274dc640a"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/diff/ladder-nodes.tsx",
+      "sha256": "4dcbfed57e1e68b863de2e5c2653a598ea2dda6a972729fca55cc031653dfd9e"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_atoms/graphical-editor/diff/index.ts",
+      "sha256": "807c1a56c202c2d360b66ce7da65389cfe4a26a376e06aa8f39938c065c177a6"
+    },
+    {
+      "path": "software/openplc-editor-zh/src/frontend/components/_features/[workspace]/editor/diff-viewer/graphical-diff-viewer.tsx",
+      "sha256": "ffac5cf9443840b63d34b3ec6383fb5e9d0f090834a5e47d3c755dedc5c80443"
+    },
+    {
+      "path": "software/dsh-plcdev/src/client/native-ladder/entry.tsx",
+      "sha256": "78f8b8326c7adbc14eaa5c1f0e0c0196ee5cfaebb0a633a326d2215504d0e601"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "generated.cjs",
+      "bytes": 310093,
+      "sha256": "51b7e29673ef7f07d36cfa39e97248f758eb258f89475c210b38884ef1075c83"
+    },
+    {
+      "name": "generated-css.mjs",
+      "bytes": 41636,
+      "sha256": "1f8fec006c1ab1cd5178d9a35e7477a7c600b5e8ec985fe8293491f9add1d4e6"
+    }
+  ]
+}

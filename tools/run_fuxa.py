@@ -31,9 +31,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--profile',type=Path,required=True);p.add_argument('--session-file',type=Path);p.add_argument('--port',type=int,default=18810);p.add_argument('--directory',type=Path,default=DEFAULT);p.add_argument('--ai-profile',type=Path);p.add_argument('--ai-helper-argv');p.add_argument('--enable-approved-ai',action='store_true');a=p.parse_args()
     if not 1024<=a.port<=65535:raise ValueError('Invalid local port')
     ai_env=ai_environment(a.enable_approved_ai,a.ai_profile,a.ai_helper_argv)
-    record=install(a.directory,skip_install=True);package=Path(record['packageRoot']);profile=a.profile.resolve();work=profile/'_appdata';work.mkdir(parents=True,exist_ok=True)
-    settings=work/'settings.js'
-    if not settings.exists():settings.write_text('module.exports={...require('+json.dumps(str(package/'settings.default.js'))+'),uiHost:"127.0.0.1",uiPort:'+str(a.port)+',nodeRedEnabled:false,daqEnabled:false,secureEnabled:false,swaggerEnabled:false,logApiLevel:"none",hideEditorOnboarding:true};\n',encoding='utf-8')
+    record=install(a.directory,skip_install=True);package=Path(record['packageRoot']);profile=a.profile.resolve()
     env=dict(os.environ,PLCDEV_FUXA_ROOT=str(package),PLCDEV_FUXA_PROFILE=str(profile),PLCDEV_FUXA_PORT=str(a.port),PLCDEV_FUXA_EXTENSION=str(ROOT/'software/fuxa-integration/server-plugin.cjs'),PLCDEV_FUXA_AI_ENABLED='0')
     if a.session_file:env['PLCDEV_FUXA_SESSION_FILE']=str(a.session_file.resolve())
     env.pop('PLCDEV_FUXA_AI_CHECK_COMMAND_JSON',None)

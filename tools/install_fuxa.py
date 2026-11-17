@@ -5,6 +5,21 @@ from plcdev_environment import tool_path
 ROOT=Path(__file__).resolve().parents[1]
 PACKAGE='@frangoteam/fuxa@1.3.5'
 DEFAULT=tool_path('fuxaPackage').parents[2]
+
+def _extension_hook(content,anchor,replacement,label,expected_sha256=None):
+    marker='PLCDEV_EXTENSION_HOOK'
+    if marker not in content:
+        if content.count(anchor)!=1:raise RuntimeError('Unexpected upstream hook in '+str(label))
+        if expected_sha256 and hashlib.sha256(content.encode('utf-8')).hexdigest()!=expected_sha256:
+            raise RuntimeError('FUXA upstream source differs; preserve and review '+str(label))
+        updated=content.replace(anchor,replacement)
+        return updated,True
+    if content.count(marker)!=1 or content.count(replacement)!=1 or content.count(anchor)!=1:
+        raise RuntimeError('Existing FUXA extension hook differs; preserve and review '+str(label))
+    if expected_sha256 and hashlib.sha256(content.replace(replacement,anchor).encode('utf-8')).hexdigest()!=expected_sha256:
+        raise RuntimeError('FUXA upstream source differs; preserve and review '+str(label))
+    return content,False
+
 def install(destination=DEFAULT,skip_install=False):
     destination=destination.resolve();package=destination/'node_modules/@frangoteam/fuxa'
     if not skip_install:
@@ -18,15 +33,20 @@ def install(destination=DEFAULT,skip_install=False):
         subprocess.run([npm,'ci','--prefix',str(destination),'--omit=dev','--no-audit','--no-fund'],check=True,cwd=ROOT)
     version=json.loads((package/'package.json').read_text())['version']
     if version!='1.3.5':raise RuntimeError('Expected pinned FUXA 1.3.5, got '+version)
-    changes=[(package/'main.js','const app = express();','const app = express();\n// PLCDEV_EXTENSION_HOOK\nif (process.env.PLCDEV_FUXA_EXTENSION) require(process.env.PLCDEV_FUXA_EXTENSION).mount(app);'),
-             (package/'dist/index.html','</head>','<link rel="stylesheet" href="/plcdev/extension.css"><script defer src="/plcdev/extension.js"></script><!-- PLCDEV_EXTENSION_HOOK --></head>')]
+    # Normalized text hashes of the local 1.3.5 pre-hook backups; unknown
+    # modifications are preserved and rejected instead of silently rewritten.
+    changes=[(package/'main.js','const app = express();','const app = express();\n// PLCDEV_EXTENSION_HOOK\nif (process.env.PLCDEV_FUXA_EXTENSION) require(process.env.PLCDEV_FUXA_EXTENSION).mount(app);','5e7458d1684de64e11ad0c9fbcbc7783fcbffe5ad4d4004a670564f59565a328'),
+             (package/'dist/index.html','</head>','<link rel="stylesheet" href="/plcdev/extension.css"><script defer src="/plcdev/extension.js"></script><!-- PLCDEV_EXTENSION_HOOK --></head>','ee3d2dc32162448d6c0da24dec7924e8da7c96354a9f6f77eaa1a37008cff3fb')]
     evidence=[]
-    for file,anchor,replacement in changes:
+    for file,anchor,replacement,expected in changes:
         content=file.read_text(encoding='utf-8');backup=file.with_name(file.name+'.plcdev-original')
-        if 'PLCDEV_EXTENSION_HOOK' not in content:
-            if content.count(anchor)!=1:raise RuntimeError('Unexpected upstream hook in '+str(file))
+        updated,changed=_extension_hook(content,anchor,replacement,file,expected)
+        original=content if changed else content.replace(replacement,anchor)
+        if backup.exists() and backup.read_text(encoding='utf-8')!=original:
+            raise RuntimeError('FUXA hook backup differs; preserve and review '+str(file))
+        if changed:
             if not backup.exists():shutil.copy2(file,backup)
-            file.write_text(content.replace(anchor,replacement),encoding='utf-8')
+            file.write_text(updated,encoding='utf-8')
         evidence.append({'file':str(file.relative_to(package)),'sha256':hashlib.sha256(file.read_bytes()).hexdigest(),'originalSha256':hashlib.sha256(backup.read_bytes()).hexdigest() if backup.exists() else None})
     # Upstream SVG editor treats text content as a pseudo-attribute. Keep this
     # targeted vendor correction reproducible without rebuilding Angular.

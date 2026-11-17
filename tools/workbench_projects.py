@@ -4,7 +4,7 @@ import json, re, os, shutil, subprocess, threading, uuid
 from factoryio_runtime import ROOT
 from plcdev_environment import tool_path
 from plcdev_runtime_owner import FileLease
-from workbench_project_config import integration_definition, configure_project, interface_definition, configure_interface_project
+from workbench_project_config import integration_definition, configure_project, interface_definition, configure_interface_project, configure_oip_scene, standalone_simulation_definition
 
 REGISTRY = ROOT / 'software/workbench/projects.json'
 PATH_FIELDS = ('plc', 'hmi', 'scene', 'hmiExecutable', 'hmiBuild')
@@ -120,8 +120,7 @@ def read_user_project(manifest_path):
     if target != {'provider': 'openplc-runtime', 'mode': 'local'}:
         raise ValueError('当前用户工程仅支持本机隔离 Runtime')
     if raw['schemaVersion'] == 1:
-        if not isinstance(simulation, dict) or simulation.get('provider') not in SIMULATORS or simulation.get('project') is not None:
-            raise ValueError('仿真组件格式无效；版本 1 只记录候选工具，未接入场景')
+        scene_config=standalone_simulation_definition(simulation,path.parent)
     elif raw['schemaVersion'] == 2 and set(raw) - {'schemaVersion', 'id', 'name', 'application', 'target', 'simulation', 'hmi', 'bindings', 'configurationRevision'}:
         raise ValueError('工程配置包含未知字段；运行状态、安装位置和凭据须留在本机环境中')
     if raw['schemaVersion'] == 3:
@@ -135,6 +134,10 @@ def read_user_project(manifest_path):
                 hmiExecutable=None, hmiBuild=None, manifestPath=str(path), projectRoot=str(path.parent),
                 application=dict(app), targetDefinition=dict(target), simulation=dict(simulation),
                 links=[dict(id='load', source='plc', target='runtime', role='program')], configuration=None)
+    if raw['schemaVersion']==1 and scene_config.get('scene'):
+        project.update(scene_config)
+        project['configuration']={'sceneFile':simulation['project'],'hmiFile':None,'interfaceFile':None,
+                                  'revision':raw.get('configurationRevision'),'editable':True}
     if raw['schemaVersion'] == 2:
         definition = integration_definition(raw, path.parent)
         project.update(definition)
@@ -257,6 +260,18 @@ class ProjectCatalog:
         """Validate without changing the recent list or any live manager."""
         return read_user_project(manifest_path)
 
+    def configure_oip(self, manifest_or_id, source):
+        with self.lock, FileLease(self.index_path.with_suffix('.lock'), timeout=3):
+            entries = self._entries()
+            registered = next((entry for entry in entries if entry['id'] == manifest_or_id), None)
+            manifest = registered['manifestPath'] if registered else manifest_or_id
+            project = read_user_project(manifest)
+            previous = next((entry for entry in entries if entry['id'] == project['id']), None)
+            if previous and _absolute(previous['manifestPath']) != Path(project['manifestPath']) and Path(previous['manifestPath']).exists():
+                raise ValueError('相同工程标识已在其他位置登记；不能配置未登记的副本')
+            configure_oip_scene(project['manifestPath'], source)
+            return self._register(read_user_project(project['manifestPath']), entries)
+
     def _create_native(self, root, language):
         if not self.editor_path.is_file():
             raise ValueError('缺少支持 CLI 新建工程的 OpenPLC 编辑器：' + str(self.editor_path))
@@ -314,7 +329,7 @@ class ProjectCatalog:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, target)
 
-    def create(self, name, parent, language='ld', simulation='none', source=None):
+    def create(self, name, parent, language='st', simulation='none', source=None):
         name = _name(name, folder=True)
         if language not in ('ld', 'st') or simulation not in SIMULATORS:
             raise ValueError('请选择 LD／ST 及支持的仿真候选')

@@ -18,4 +18,10 @@ catch(error) {
   if(error.code!=='MODULE_NOT_FOUND')throw error;
   ({build}=createRequire(process.env.PLCDEV_DSH_BUILD_PACKAGE || resolve(root,'.tools/dsh-host/package.json'))('esbuild'));
 }
-export const buildTools={build};
+// Browser test bundles share host React, including native viewer subpath imports.
+export const buildTools={build:options=>build({...options,external:options.platform==='node'&&options.external?.includes('react')?[...new Set([...options.external,'react-dom'])]:options.external,alias:options.platform==='browser'?{
+  'react/jsx-runtime':packages.resolve('react/jsx-runtime'),
+  'react-dom':packages.resolve('react-dom'),
+  'react-dom/client':packages.resolve('react-dom/client'),
+  ...options.alias,
+}:options.alias})};

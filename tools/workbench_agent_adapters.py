@@ -113,7 +113,7 @@ def _files(project):
         if project.get(key):
             path = Path(project[key]); plain(path, root); result.add(path)
     if project.get('scene'):
-        result.update(validate_oip(project['scene'])['files'])
+        result.update(validate_oip(project['scene'], editing=read_json(manifest)['schemaVersion']!=2)['files'])
     ordered = sorted(result, key=lambda p: p.relative_to(root).as_posix())
     for path in ordered:
         plain(path, root)
@@ -220,7 +220,7 @@ class AgentAdapters:
                                  'savedRevisionCandidate': saved_count_candidate,
                                  'candidateToolsReady': candidate_tools, 'modelGeneration': False, 'apply': False, 'runtimeControl': False}}
 
-    def propose_candidate(self, project, *, task_id, expected_revision, operation, source_basis='editor_current'):
+    def propose_candidate(self, project, *, task_id, expected_revision, operation, source_basis='editor_current', intent=None, revision_parent=None):
         if source_basis not in ('editor_current', 'saved_revision'):
             raise AdapterError('invalid_request', '候选来源必须是编辑器当前状态或已保存版本。')
         project = _manifest_project(project)
@@ -234,31 +234,82 @@ class AgentAdapters:
         with _candidate_project_lease(self.state_root, project['id']):
             return self._propose_candidate_locked(project, task_id=task_id,
                                                    expected_revision=expected_revision, operation=operation,
-                                                   source_basis=source_basis)
+                                                   source_basis=source_basis, intent=intent, revision_parent=revision_parent)
 
-    def _propose_candidate_locked(self, project, *, task_id, expected_revision, operation, source_basis):
+    def propose_hmi_view_name(self, project, *, task_id, expected_revision, view_id, name, request=None, revision_parent=None):
+        """Saved-version HMI-only candidate, with no PLC or scene operation.
+
+        This deliberately narrow native operation supports both batch and
+        project-interface manifests; it does not claim arbitrary AI page edits.
+        """
+        result = self.propose_candidate(project, task_id=task_id,
+            expected_revision=expected_revision, source_basis='saved_revision',
+            operation={'tool':'fuxa', 'kind':'view-name', 'viewId':view_id, 'value':name},
+            intent={'workflow':'hmi-view-name-v1','request':request,'plan':{'viewId':view_id,'name':name}} if request is not None else None, revision_parent=revision_parent)
+        return result
+
+    def propose_hmi_static_text(self, project, *, task_id, expected_revision, view_id, element_id, text, request=None, revision_parent=None):
+        """Change one verified top-level static text node in an isolated copy."""
+        return self.propose_candidate(project, task_id=task_id, expected_revision=expected_revision,
+            source_basis='saved_revision', operation={'tool':'fuxa','kind':'static-text',
+                                                       'viewId':view_id,'elementId':element_id,'value':text},
+            intent={'workflow':'hmi-static-text-v1','request':request,'plan':{'viewId':view_id,'elementId':element_id,'text':text}} if request is not None else None, revision_parent=revision_parent)
+
+    def propose_hmi_readonly_value(self, project, *, task_id, expected_revision, view_id, signal_id, request):
+        return self.propose_candidate(project, task_id=task_id, expected_revision=expected_revision,
+            source_basis='saved_revision', operation={'tool':'fuxa','kind':'readonly-value','viewId':view_id,'value':signal_id},
+            intent={'workflow':'hmi-readonly-value-v1','request':request,'plan':{'viewId':view_id,'signalId':signal_id}})
+
+    def _propose_candidate_locked(self, project, *, task_id, expected_revision, operation, source_basis, intent=None, revision_parent=None):
         if not isinstance(task_id, str) or not re.fullmatch(r'[a-zA-Z0-9_-]{1,80}', task_id):
             raise AdapterError('invalid_request', '任务身份无效。')
         if not isinstance(expected_revision, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_revision):
             raise AdapterError('invalid_request', '需要已核对的工程版本摘要。')
-        if not isinstance(operation, dict) or set(operation) - {'tool','kind','value','partId','viewId'}:
+        if not isinstance(operation, dict) or set(operation) - {'tool','kind','value','partId','viewId','elementId'}:
             raise AdapterError('invalid_request', '不支持的候选操作。')
         tool, kind, value = operation.get('tool'), operation.get('kind'), operation.get('value')
-        if tool not in TOOLS or not isinstance(value, str) or not value.strip() or len(value) > 80 or any(ord(c) < 32 or c in '<>' for c in value):
+        if tool not in TOOLS or not isinstance(value, str) or not value.strip() or len(value) > (160 if kind == 'static-text' else 80) or any(ord(c) < 32 or c in '<>' for c in value):
             raise AdapterError('invalid_request', '候选目标或名称无效。')
-        allowed = {('openplc','project-name'), ('openplc','batch-count-rename'), ('fuxa','view-name'), ('oip','part-name')}
+        allowed = {('openplc','project-name'), ('openplc','batch-count-rename'), ('fuxa','view-name'), ('fuxa','static-text'), ('fuxa','readonly-value'), ('oip','part-name')}
         if (tool, kind) not in allowed:
             raise AdapterError('not_ready', '该工具的此类候选尚未接入。')
+        if kind == 'readonly-value' and (revision_parent is not None or intent is None or source_basis != 'saved_revision'):
+            raise AdapterError('not_ready', '新增只读显示需要明确需求和保存版本，暂不支持父候选修订。')
+        if kind != 'static-text' and 'elementId' in operation:
+            raise AdapterError('invalid_request', '当前操作不接受静态文字身份。')
         if tool in ('fuxa', 'oip'):
             ident = operation.get('viewId' if tool == 'fuxa' else 'partId')
             if not isinstance(ident, str) or not ident or len(ident) > 120 or any(ord(c) < 32 for c in ident):
                 raise AdapterError('invalid_request', '请指定有效的原生控件或场景部件身份。')
+        if kind == 'static-text' and (not isinstance(operation.get('elementId'),str) or not re.fullmatch(r'PLCD_[A-Za-z0-9_-]{1,100}',operation['elementId'])):
+            raise AdapterError('invalid_request', '请指定已核对的静态文字身份。')
         states = _safe_state(self.observer, project)
         if source_basis == 'editor_current' and states[tool]['editState'] not in ('closed', 'clean'):
             raise AdapterError('not_ready', '无法确认该工具无未保存内容或待处理预览；未生成候选。')
         before = _snapshot(project)
         if before['projectRevision'] != expected_revision:
             raise AdapterError('conflict', '工程源已变化；请重新读取基线。')
+        parent_project = None
+        if revision_parent is not None:
+            if tool != 'fuxa' or source_basis != 'saved_revision' or intent is None:
+                raise AdapterError('invalid_request', '修订范围无效。')
+            parent_project = read_user_project(revision_parent['manifestPath'])
+            if parent_project['id'] != project['id'] or _snapshot(parent_project)['projectRevision'] != revision_parent['candidateDigest']:
+                raise AdapterError('conflict', '父候选文件已变化；未发布修订。')
+        if intent is not None:
+            from workbench_hmi_text import saved_target_catalog
+            from workbench_hmi_intent import validate_hmi_intent
+            if tool!='fuxa' or not project.get('hmi'):
+                raise AdapterError('invalid_request', 'HMI 意图范围无效。')
+            names,targets=saved_target_catalog(read_json((parent_project or project)['hmi']))
+            try:
+                if kind == 'readonly-value':
+                    from workbench_hmi_value import validate_value_intent, value_targets
+                    validate_value_intent(intent['request'],intent['plan'],value_targets(project))
+                else: validate_hmi_intent(intent['workflow'],intent['request'],intent['plan'],names if kind=='view-name' else targets)
+            except (ValueError,KeyError,TypeError) as exc:raise AdapterError('not_ready',str(exc)) from None
+            if _snapshot(project)['projectRevision'] != expected_revision or (parent_project and _snapshot(parent_project)['projectRevision'] != revision_parent['candidateDigest']):
+                raise AdapterError('conflict', '读取修改目标期间工程源已变化。')
         root, files = _files(project)
         if self.state_root.resolve().is_relative_to(root) or root.is_relative_to(self.state_root.resolve()):
             raise AdapterError('invalid_request', '任务目录不得与用户工程互相包含。')
@@ -290,6 +341,7 @@ class AgentAdapters:
         if copied != before:
             raise AdapterError('conflict', '候选副本与已保存版本不一致；未开始修改。')
         changed_paths = None
+        no_change = bool(parent_project and value.strip() == revision_parent['baselineValue'])
         if tool == 'openplc' and kind == 'batch-count-rename':
             if value.strip() != 'BatchCount': raise AdapterError('not_ready','此候选仅支持 Count 改为 BatchCount。')
             role = candidate.get('configuration',{}).get('bindings',{}).get('plc',{}).get('count',{})
@@ -312,10 +364,26 @@ class AgentAdapters:
             views = payload.get('hmi', {}).get('views', [])
             matches = [x for x in views if isinstance(x, dict) and x.get('id') == operation.get('viewId')]
             if len(matches) != 1: raise AdapterError('invalid_request', '请指定本工程唯一的 FUXA viewId。')
-            old = matches[0]['name'];matches[0]['name'] = value.strip()
+            if no_change:
+                old = revision_parent['baselineValue']
+                changed_paths = []
+            elif kind == 'readonly-value':
+                from workbench_hmi_value import append_value
+                label = append_value(candidate, payload, operation['viewId'], value)
+                old = '尚未添加'; value = '新增只读数值显示：' + label
+            elif kind == 'static-text':
+                from workbench_hmi_text import replace_static_text
+                old = replace_static_text(matches[0], operation['elementId'], value)
+            else:
+                old = matches[0].get('name')
+                if not isinstance(old, str):
+                    raise AdapterError('not_ready', '当前画面没有可核对的名称；未发布候选。')
+                if old == value.strip():
+                    raise AdapterError('invalid_request', '画面名称没有变化；未发布候选。')
+                matches[0]['name'] = value.strip()
         else:
             if not candidate.get('scene'): raise AdapterError('not_ready', '当前工程没有 OIP 场景。')
-            scene = validate_oip(candidate['scene']);path = scene['root'] / scene['project']['scene'];payload = read_json(path)
+            scene = validate_oip(candidate['scene'],editing=read_json(candidate['manifestPath'])['schemaVersion']!=2);path = scene['root'] / scene['project']['scene'];payload = read_json(path)
             matches = [x for x in payload['parts'] if isinstance(x, dict) and x.get('id') == operation.get('partId')]
             if len(matches) != 1: raise AdapterError('invalid_request', '请指定本工程唯一的 OIP partId。')
             old = matches[0].get('name');matches[0]['name'] = value.strip()
@@ -332,7 +400,7 @@ class AgentAdapters:
         after = _snapshot(candidate)
         if kind == 'batch-count-rename' and after['projectRevision'] != result_cli['candidateDigest']:
             raise AdapterError('conflict', 'OpenPLC 候选摘要不一致；未发布。')
-        if _snapshot(project)['projectRevision'] != expected_revision:
+        if _snapshot(project)['projectRevision'] != expected_revision or (parent_project and _snapshot(parent_project)['projectRevision'] != revision_parent['candidateDigest']):
             raise AdapterError('conflict', '生成期间工程源已变化；未发布候选。')
         if source_basis == 'editor_current' and _safe_state(self.observer, project)[tool]['editState'] not in ('closed', 'clean'):
             raise AdapterError('conflict', '生成期间工具编辑状态已变化；未发布候选。')
@@ -349,6 +417,15 @@ class AgentAdapters:
                   'changedFiles':differences, 'summary':{'before':old, 'after':value.strip()},
                   'editorState':states[tool], 'validation':'native-structure-only',
                   'authoritativeSourceModified':False, 'modelCalled':False, 'applySupported':False}
+        if tool == 'fuxa':
+            result['scope'] = 'hmi-only'
+            result['revisionSupported'] = not no_change and kind != 'readonly-value'
+            result['noChange'] = no_change
+            result['target'] = {'viewId': operation['viewId']}
+            if kind == 'static-text': result['target']['elementId'] = operation['elementId']
+            if kind == 'readonly-value': result['target']['signalId'] = operation['value']
+            result['changes'] = [{'path':key, 'beforeSha256':before['files'][key], 'afterSha256':after['files'][key]} for key in differences]
+            result['components'] = [{'tool':'fuxa', 'summary':result['summary']}]
         receipt = destination / 'candidate.json'
         with receipt.open('w' if kind == 'batch-count-rename' else 'x', encoding='utf-8', newline='\n') as stream:
             json.dump(result, stream, ensure_ascii=False, indent=2);stream.write('\n')

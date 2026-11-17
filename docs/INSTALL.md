@@ -1,51 +1,34 @@
-# 安装与启动
+# 安装与接入
 
-这是源码开发预览。已验环境为 Windows、Python 3.13、Node 25；插件声明 Node >=24，其他主版本未作为当前本机基线验收。
+0.5.9 是 Windows 源码开发预览，维护者基线为 Node 25、Python 3.13、日常 DSH 0.2.2。完整干净电脑安装尚未验收；不要把通过源码测试理解为所有原生工具已可运行。
 
-## 只构建插件
+## 构建与状态目录
 
-在仓库根目录执行 `npm ci`、`npm run build`、`npm test`。根 lock 固定 esbuild 0.25.12；安装访问 npm，不调用模型或运行 PLC。
+在仓库根目录执行 `npm ci` 和 `npm run build`。构建生成 `software/dsh-plcdev/lib/client.js`；`npm test` 使用离线或临时本机回环夹具，不调用模型、启动真实工具或运行 PLC。部分需要原生源码的集成项可能跳过，结果应单独报告。
 
-## 本机工具
+执行 `python -B tools/plcdev_environment.py init` 后配置本机 `outputs/local/environment.json`。这里的路径只留在本机；不要上传配置、工程索引、候选账本、profile 或凭据。不同检出若共用同一 Runtime，应配置同一个 `state.runtimeOwnerDirectory`，不能换目录规避占用。
 
-需外部安装 DSH、FUXA 1.3.5、OpenPLC Runtime v4.3.0 与 Windows MSYS。随附 DSH 安装锁固定 0.2.1-rc.5，模型解耦已在该版正式 AgentLoop 中离线验证；真实对话与 A/B 模型切换验收使用桌面 0.2.2-rc.1 的独立配置。当前编辑器基线为 OpenPLC Editor 4.3.2 的定制 r4 分发；原始上游同版本不保证具备全部 CLI 和解析修复。
+大构建和缓存可放在 F 盘。本版 OIP 隔离编辑适配目前仍使用 `F:/PLCdev-build-temp/20261116/oip-native/runs` 和 `F:/PLCdev-build-temp/20261117/oip-editor-runtime`；没有 F 盘的环境尚需配置化适配，不能宣称直接可用。
 
-```powershell
-python -B tools/plcdev_environment.py init
-```
+## 原生工具与下载
 
-编辑生成的 `outputs/local/environment.json`，填入本机 editor、runtime、msys、python、pythonEnvironment 等路径。`config/environment.example.json` 只有示例路径。同机多个检出必须将 `state.runtimeOwnerDirectory` 指向同一个绝对目录；不要删锁或换目录规避占用。
+| 工具 | 推荐来源 | 当前接入条件 |
+| --- | --- | --- |
+| OpenPLC Editor | [DSH 适配源码与编辑预览](https://github.com/HellsegaMIMIC/openplc-editor-dsh/releases/tag/v2026.11.17-preview.1) | 共享编辑执行器还需该源码检出位于 `software/openplc-editor-zh`，安装其锁定依赖；便携 EXE 不含完整编译工具链 |
+| FUXA | [中文补丁与固定版本安装资料](https://github.com/HellsegaMIMIC/fuxa-zh/releases/tag/v2026.11.17-preview.1) | 固定 1.3.5；权限核查依赖原生文件指纹及 OpenPLC 源码目录中的 TypeScript/JSDOM |
+| OIP | [中文补丁与说明](https://github.com/HellsegaMIMIC/open-industry-project-zh/releases/tag/v2026.11.17-preview.1) | DSH 原生编辑桥接目前要求官方 2026.11.9 的精确文件指纹；独立中文补丁修改主进程后，不能直接作为该桥接输入 |
+| OpenPLC Runtime | [官方 Runtime](https://github.com/Autonomy-Logic/openplc-runtime) | 本机已核查基线 v4.3.0；Runtime 与 Windows MSYS 编译环境需另行安装并配置 |
 
-```powershell
-python -m venv .tools/workbench-agent-venv
-python -m pip --python .tools/workbench-agent-venv install -r config/workbench-python.lock.txt
-python -B -X utf8 tools/install_fuxa.py
-./tools/install_dsh_workbench.ps1 -ProfileDirectory "$PWD/outputs/dsh-home"
-python -B -X utf8 tools/manage_workbench_projects.py --state "$PWD/outputs/first-workbench" import --source "C:/MyProjects/OwnPLC/project.json" --parent "C:/MyProjects/Workbench" --name OwnProject
-./tools/start_dsh_workbench.ps1 -StateDirectory "$PWD/outputs/first-workbench" -ProfileDirectory "$PWD/outputs/dsh-home" -Port 55110
-```
+DSH 的“工具下载与安装”显示同一组入口和只读检测结果。找到入口只说明文件存在；下载、安装、版本兼容和实际运行是不同步骤。
 
-使用与 venv 匹配的普通基础 Python。DSH／FUXA 按固定 npm lock 安装；这些锁来自维护者基线，联网全新安装尚未完成发行验收。这里导入你自己已有的原生 OpenPLC 工程，只复制源码并生成新 UUID；已存在的目标工程目录拒绝覆盖，不调用模型或运行 PLC。公开包没有案例，请将示例路径替换为自己的项目路径，先成功登记一个工程，再启动后台。也可用同一命令的 open --manifest 入口登记自己已有的 .plcdev。create 入口新建空白工程需要支持 CLI 的定制编辑器。
+OpenPLC 源码依赖及准确公开提交见 [EDITOR-DEPENDENCY.md](EDITOR-DEPENDENCY.md)。OIP 原版安装及内置部件不随插件仓库分发；不会仅靠 host/catalog 文件就获得原生编辑能力。可选教学数值模型和商业 Factory I/O 场景也未包含。
 
-## 在对话中修改工程
+## DSH 接入
 
-1. 在对话头部选择已登记的工程，使用 DSH 原生输入框提出修改需求。
-2. 当前模型读取工程工具并提交修改计划；从消息中的成果入口打开右侧审阅，核对修改内容及源版本。
-3. 确认后创建修改副本。打开副本只改变查看对象，点击“用于后续对话”才改变对话工程。
-4. 对支持继续修改的候选，在审阅页选择“继续修改”，返回原生输入框提出新要求。当前确定性修订支持标题变更，其他修改范围由实际能力决定。
+将构建后的 `software/dsh-plcdev` 作为本地插件安装到日常 DSH，插件配置 `projectRoot` 指向本仓库，`controllerFile` 指向对应本机工程服务描述文件。描述文件含本机能力凭据，不粘贴到聊天或提交 Git。
 
-无需切换到旧“DeepSeek · PLCdev 工程助手”条目。当前模型及预设需要开放兼容的 native 工具调用；请求没有工程工具时会提示限制，不自动替换模型。普通聊天、查看和审阅已有成果仍可使用。真实验证限官方 DeepSeek 适配器的 `deepseek-flash` 与 `deepseek-v4-pro`；其他模型、跨供应商和 PTC 需要单独核验。宿主中的模型凭据留在宿主，后台候选生成不接收这些密钥。
+仓库中的 `install_dsh_workbench.ps1` / `start_dsh_workbench.ps1` 保留独立 Web 开发宿主的旧安装路径，其锁为 DSH 0.2.1-rc.5；它们不是升级日常 0.2.2 桌面的安装程序。不要用它们覆盖已有桌面 profile。插件 tgz 只含插件代码和界面 bundle，本机 Python 工程服务仍需要这份源树。
 
-切换模型保留已绑定工程、候选及修订关系。已提交或结果未知的请求按原编号恢复，不因换模型重新生成；同一轮尚未提交时更换模型或追加需求会使旧轮上下文失效，已提交的后台任务仍按原记录处理。
+新会话开启 PLCdev 后选择或创建工程，再提出修改。未发生工程操作前可以关闭；已有工程任务的会话保留工程身份。生成需要宿主和模型支持兼容的 native 工具调用，查看和审阅不依赖生成能力。凭据继续由 DSH 管理，插件不会把密钥复制到 OpenPLC。
 
-## 编译与运行
-
-在右侧工程页或 DSH 侧栏的 PLCdev 工作台打开 PLC／FUXA；编译准备成功并核对 STOP 后显式运行。监视页面的输入先回车确认草稿，点击应用才写 PLC。结束时停止工艺、停止 PLC、结束所属会话；关闭网页不是停止 Runtime。
-
-## 依赖缺口
-
-部分候选 CLI 仍读取 `software/openplc-editor-zh` 的 TypeScript、worker、JSDOM 和定制编辑器；权限门禁核对固定 FUXA 与编辑器源码依赖指纹。缺失时拒绝操作，不应删除检查。本包未混入整个 fork、node_modules 或 EXE。
-
-`docs/editor-working-tree.patch` 只记录维护者当前编辑器工作树差异和 base commit，尚未证明覆盖所有历史定制，不能单独代表完整 r4 安装。见 `docs/EDITOR-DEPENDENCY.md`。
-
-OIP 为可选外部安装，此分发没有任何案例或场景。EEZ／Factory I/O 历史适配保留代码，但商业场景、HMI EXE 和第三方模型未打包，相关入口可显示不可用。
+“编译并准备”沿用编译和装载流程；准备完成后显式运行 PLC。关闭页面或停用插件不等于停止独立 Runtime。实体下载、强制 I/O 和硬件运行不在本发行验收内。

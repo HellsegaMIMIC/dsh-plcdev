@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {packages,buildTools} from './dependencies.mjs';
 import { dirname,resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { reviewActionRequest, readReviewPending, reviewPendingKey, recoverConversationRequest } from '../src/client/conversation-client.mjs';
+import { reviewActionRequest, readReviewPending, reviewPendingKey, recoverConversationRequest, candidateChanges, reviewReceiptRequest, validateReviewReceipt } from '../src/client/conversation-client.mjs';
 const projectId='user-'+'a'.repeat(32), taskId='task-'+'b'.repeat(32), digest='c'.repeat(64), source='d'.repeat(64), kept='e'.repeat(64);
 const target={projectId,taskId};
 const task=(status='awaiting_review')=>({projectId,taskId,status,workflow:'joint-ai-v1',projectRevision:source,candidate:{candidateDigest:digest},retention:{revision:kept}});
@@ -16,7 +16,14 @@ test('review actions pin exact conversation, task, digest and source or retained
   assert.equal(reviewActionRequest('conversation-a',task('kept'),target,'undo','r1'),null);
   assert.equal(reviewActionRequest('conversation-a',task(),target,'compile','r1'),null);
   assert.equal(reviewActionRequest('conversation-a',task(),target,'run','r1'),null);
+  assert.equal(reviewActionRequest('conversation-a',{...task(),supersededBy:'task-'+'f'.repeat(32)},target,'keep','r1'),null);
   assert.equal(reviewActionRequest('conversation-a',{...task(),workflow:'count-rename-v1'},target,'keep','r1'),null);
+});
+test('review differences contain only verified changed files and never infer missing evidence',()=>{
+  const before='1'.repeat(64),after='2'.repeat(64);
+  assert.equal(candidateChanges(task()),null);
+  assert.equal(candidateChanges({...task(),candidate:{changes:[{path:'bad',beforeSha256:'invalid',afterSha256:after}]}}),null);
+  assert.deepEqual(candidateChanges({...task(),candidate:{changes:[{path:'same',beforeSha256:before,afterSha256:before},{path:'screen.fuxap',beforeSha256:before,afterSha256:after}]}}),[{path:'screen.fuxap',beforeSha256:before,afterSha256:after}]);
 });
 
 test('three-member generation uses the same pinned human review boundary and never offers Runtime tools',()=>{
@@ -37,6 +44,24 @@ test('unknown review keeps original request ID even when current task state adva
   store.set(reviewPendingKey('conversation-a',target),JSON.stringify({...body,projectId:'other'}));
   assert.throws(()=>readReviewPending(storage,'conversation-a',target),/无效/);
 });
+test('read-only keep receipt uses the original task and effect identity',()=>{
+ const hmi={...task(),workflow:'hmi-view-name-v1'},original=reviewActionRequest('conversation-a',hmi,target,'keep','original-id');
+ const recorded={...hmi,status:'unknown_outcome',reviewReceiptRequest:(({conversationId,...body})=>body)(original)};
+ assert.deepEqual(reviewReceiptRequest('conversation-a',recorded,target,null),original);
+ assert.deepEqual(reviewReceiptRequest('conversation-a',hmi,target,original),original);
+ assert.deepEqual(reviewReceiptRequest('conversation-a',task(),target,original),original);
+ assert.deepEqual(reviewReceiptRequest('conversation-a',{...task(),workflow:'team-generation-v1'},target,original),original);
+ assert.equal(reviewReceiptRequest('conversation-b',{...task(),workflow:'team-generation-v1'},target,original),null);
+ assert.equal(reviewReceiptRequest('conversation-a',{...task(),workflow:'team-generation-v1',projectRevision:'f'.repeat(64)},target,original),null);
+ assert.equal(reviewReceiptRequest('conversation-b',hmi,target,original),null);
+ assert.equal(reviewReceiptRequest('conversation-a',{...recorded,projectRevision:'f'.repeat(64)},target,null),null);
+ assert.equal(reviewReceiptRequest('conversation-a',{...recorded,reviewReceiptRequest:{...recorded.reviewReceiptRequest,action:'undo'}},target,null),null);
+ const result={ok:true,projectId,taskId,candidateDigest:digest,clientRequestId:'original-id',state:'unknown',reasonCode:'not_confirmed',keptProjectId:null,manifestPath:null,revision:null};
+ assert.equal(validateReviewReceipt(result,original),result);
+ assert.throws(()=>validateReviewReceipt({...result,keptProjectId:'user-b'},original));
+ assert.throws(()=>validateReviewReceipt({...result,clientRequestId:'another'},original));
+ assert.equal(validateReviewReceipt({...result,state:'confirmed_unregistered',keptProjectId:'user-b',manifestPath:'D:/fixture/project.plcdev',revision:kept},original).state,'confirmed_unregistered');
+});
 test('recovering a native joint request cannot silently downgrade its workflow',()=>{
   const original={conversationId:'conversation-a',projectId,expectedVersion:1,request:'批次计数联合候选',expectedRevision:source,executionScope:'proposal',sourceBasis:'saved_revision',clientRequestId:'native-123',workflow:'joint-ai-v1'};
   assert.equal(recoverConversationRequest(original,'conversation-a').workflow,'joint-ai-v1');
@@ -49,47 +74,58 @@ test('native review buttons issue explicit pinned actions and disable undo after
   const {build}=buildTools;
   const React=deps('react'),{JSDOM,VirtualConsole}=deps('jsdom');
   const prior={window:globalThis.window,document:globalThis.document,navigator:globalThis.navigator,fetch:globalThis.fetch};
-  const errors=[],posts=[],vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));
+  const errors=[],posts=[],editorOpens=[],vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));
   const dom=new JSDOM('<div id="root"></div>',{url:'http://127.0.0.1:55112',pretendToBeVisual:true,virtualConsole:vc});
   for(const key of ['window','document','navigator'])Object.defineProperty(globalThis,key,{configurable:true,writable:true,value:key==='window'?dom.window:dom.window[key]});
-  const {createRoot}=deps('react-dom/client');let current={...task(),request:'联合样例',retention:undefined},savedRevision=source;
+  const {createRoot}=deps('react-dom/client');let current={...task(),request:'联合样例',retention:undefined,candidate:{candidateDigest:digest,changes:[{path:'screen.fuxap',beforeSha256:'1'.repeat(64),afterSha256:'2'.repeat(64)},{path:'unchanged-file',beforeSha256:'3'.repeat(64),afterSha256:'3'.repeat(64)}]}},savedRevision=source;
   globalThis.fetch=async(url,options={})=>{
     const u=new URL(url,'http://127.0.0.1:55112');
+    if(u.pathname.endsWith('/editor-open')){const body=JSON.parse(options.body);editorOpens.push(body);assert.equal(body.target,'retained');return {ok:true,status:200,json:async()=>({ok:true,sourceProjectId:projectId,taskId,targetProjectId:'user-retained',launchId:'editor-review',nativeProjectPath:'D:/copy/plc/project.json',state:'loaded'})};}
+    if(!options.body&&u.pathname.endsWith('/conversations'))return {ok:true,status:200,json:async()=>({conversationId:'chat-review',projectId,version:1,taskRefs:[{projectId,taskId}],pendingRequests:[]})};
     if(!options.body)return {ok:true,status:200,json:async()=>({projectId,projectRevision:savedRevision,tasks:[current]})};
     const body=JSON.parse(options.body);posts.push({path:u.pathname,body});assert.equal(u.pathname,'/api/plcdev/conversations/review');
     if(body.action==='keep')current={...current,status:'kept',retention:{revision:kept,keptProjectId:'user-retained'}};
     if(body.action==='compile')current={...current,status:'compiled',compilation:{status:'compiled'}};
     return {ok:true,status:202,json:async()=>({ok:true,projectId,taskId,candidateDigest:digest,task:current})};
   };
-  const bundle=await build({entryPoints:[resolve(root,'software/dsh-plcdev/src/client/Conversation.tsx')],bundle:true,write:false,format:'cjs',platform:'node',jsx:'automatic',external:['react','react/jsx-runtime']});
+  const bundle=await build({entryPoints:[resolve(root,'software/dsh-plcdev/src/client/Conversation.tsx')],bundle:true,write:false,format:'cjs',platform:'node',jsx:'automatic',external:['react','react/jsx-runtime','react-dom']});
   const module={exports:{}};new Function('require','module','exports',bundle.outputFiles[0].text)(deps,module,module.exports);
   const reactRoot=createRoot(dom.window.document.getElementById('root')),wait=()=>new Promise(done=>setTimeout(done,110));
-  const button=label=>{const found=[...dom.window.document.querySelectorAll('button')].find(b=>b.textContent===label);assert.ok(found,label);return found;};
+  const findButton=label=>[...dom.window.document.querySelectorAll('button')].find(b=>b.textContent===label);
+  const button=label=>{const found=findButton(label);assert.ok(found,label);return found;};
+  const shown=text=>dom.window.document.body.textContent.includes(text);
+  const waitFor=async(predicate,label)=>{const deadline=Date.now()+10000;while(!predicate()&&Date.now()<deadline)await new Promise(done=>setTimeout(done,20));assert.ok(predicate(),label+'\n'+dom.window.document.body.textContent);};
+  const enabled=label=>findButton(label)&&!findButton(label).disabled;
   try{
-    reactRoot.render(React.createElement(module.exports.ConversationReview,{sessionId:'chat-review',onOverview:()=>{},useTabInfo:()=>({tab:{navigation:{params:target}}})}));await wait();
-    assert.equal(posts.length,0);assert.equal(button('创建修改副本').disabled,false);assert.equal(button('放弃这次修改').disabled,false);assert.equal(button('编译保留版本').disabled,true);
+    reactRoot.render(React.createElement(module.exports.ConversationReview,{sessionId:'chat-review',onOverview:()=>{},useTabInfo:()=>({tab:{navigation:{params:target}}})}));await waitFor(()=>enabled('保留本轮修改'),'initial candidate must finish loading');
+    assert.equal(posts.length,0);assert.equal(button('保留本轮修改').disabled,false);assert.equal(button('撤销本轮').disabled,false);assert.equal(button('编译保留版本').disabled,true);
+    assert.ok(dom.window.document.querySelector('ul').textContent.includes('screen.fuxap'));assert.ok(!dom.window.document.querySelector('ul').textContent.includes('unchanged-file'));
     assert.ok(dom.window.document.body.textContent.includes('工程名称未能确认'),'Missing name metadata does not hide a valid task');
-    savedRevision='f'.repeat(64);button('刷新').click();await wait();
-    assert.equal(button('创建修改副本').disabled,true);assert.equal(button('放弃这次修改').disabled,false);
-    assert.ok(dom.window.document.body.textContent.includes('旧候选不能保留'));assert.equal(posts.length,0);
-    savedRevision=source;button('刷新').click();await wait();
-    button('创建修改副本').click();await wait();
+    savedRevision='f'.repeat(64);button('刷新').click();await waitFor(()=>shown('旧候选不能保留或继续修改')&&findButton('保留本轮修改')?.disabled,'changed baseline must disable retention');
+    assert.equal(button('保留本轮修改').disabled,true);assert.equal(button('撤销本轮').disabled,false);
+    assert.ok(dom.window.document.body.textContent.includes('旧候选不能保留或继续修改'));assert.equal(posts.length,0);
+    savedRevision=source;button('刷新').click();await waitFor(()=>enabled('保留本轮修改'),'matching baseline must enable retention');
+    button('保留本轮修改').click();await waitFor(()=>posts.length===1&&editorOpens.length===1&&enabled('编译保留版本'),'keep and editor handoff must settle');
     assert.equal(posts[0].body.expectedRevision,source);assert.equal(posts[0].body.conversationId,'chat-review');assert.equal(posts[0].body.candidateDigest,digest);
-    assert.equal([...dom.window.document.querySelectorAll('button')].some(b=>b.textContent==='放弃这次修改'),false);assert.equal(button('创建修改副本').disabled,true);assert.equal(button('编译保留版本').disabled,false);
-    button('编译保留版本').click();await wait();assert.equal(posts[1].body.expectedRevision,kept);assert.equal(posts[1].body.taskId,taskId);
+    assert.equal([...dom.window.document.querySelectorAll('button')].some(b=>b.textContent==='撤销本轮'),false);assert.equal(findButton('保留本轮修改'),undefined);assert.equal(button('编译保留版本').disabled,false);
+    button('编译保留版本').click();await waitFor(()=>posts.length===2&&shown('编译通过')&&enabled('编译保留版本'),'compilation receipt must settle');assert.equal(posts[1].body.expectedRevision,kept);assert.equal(posts[1].body.taskId,taskId);
     assert.ok(dom.window.document.body.textContent.includes('编译通过'));assert.equal(posts.some(p=>p.path.includes('/action')),false);assert.deepEqual(errors,[]);
-    current={...current,status:'conflict',reason:'保留工程版本已变化'};button('刷新').click();await wait();
+    current={...current,status:'conflict',reason:'保留工程版本已变化'};button('刷新').click();await waitFor(()=>shown('本次操作版本冲突'),'conflict state must load');
     assert.ok(dom.window.document.body.textContent.includes('本次操作版本冲突'));
     assert.ok(dom.window.document.body.textContent.includes('历史编译通过（旧版本回执），不代表本次操作成功。'));
     assert.equal([...dom.window.document.querySelectorAll('h3')].some(e=>e.textContent==='编译通过'),false);
     assert.equal(button('编译保留版本').disabled,true);assert.equal(current.compilation.status,'compiled');
     const reviews=[];
-    reactRoot.render(React.createElement(module.exports.NativeToolCard,{phase:'result',toolName:'plcdev_propose_joint',block:{content:[{type:'text',text:JSON.stringify({task:current})}],isError:false},onReviewTask:value=>reviews.push(value)}));await wait();
-    button('查看更改').click();await wait();assert.deepEqual(reviews,[target],'Tool result navigates through its injected session action without owner sessionId props');
+    savedRevision='f'.repeat(64);
+    reactRoot.render(React.createElement(module.exports.NativeToolCard,{phase:'result',toolName:'plcdev_propose_joint',block:{content:[{type:'text',text:JSON.stringify({task:current})}],isError:false},onReviewTask:value=>reviews.push(value)}));await waitFor(()=>shown('当前任务：冲突'),'tool card live status must load');
+    assert.ok(dom.window.document.body.textContent.includes('保留工程版本已变化'));
+    assert.ok(dom.window.document.body.textContent.includes('当前任务：冲突'));
+    button('查看更改').click();assert.deepEqual(reviews,[target],'Tool result navigates through its injected session action without owner sessionId props');
+    savedRevision=source;
     current={...task(),workflow:'team-analysis-v1',status:'analysis_ready',candidate:undefined,retention:undefined,
       teamAnalysis:{rootSessionId:'native-lead',members:[{role:'plc',sessionId:'native-plc',nativeTaskId:'t1',instruction:'检查参数',reportDigest:digest,report:{summary:'目标范围分析',findings:['PLC 明确校验范围'],unverified:['未运行实测']}}]}};
-    reactRoot.render(React.createElement(module.exports.ConversationReview,{sessionId:'chat-review',useTabInfo:()=>({tab:{navigation:{params:target}}}),onOverview:()=>{}}));await wait();
-    assert.ok(dom.window.document.body.textContent.includes('PLCdev 团队分析'));
+    reactRoot.render(React.createElement(module.exports.ConversationReview,{sessionId:'chat-review',useTabInfo:()=>({tab:{navigation:{params:target}}}),onOverview:()=>{}}));await waitFor(()=>shown('目标范围分析'),'analysis report must load');
+    assert.ok(dom.window.document.body.textContent.includes('团队分析'));
     assert.ok(dom.window.document.body.textContent.includes('目标范围分析'));
     assert.ok(dom.window.document.body.textContent.includes('编译和 Runtime 验证未执行'));
     assert.equal([...dom.window.document.querySelectorAll('button')].some(b=>/保留|编译|打开候选/.test(b.textContent)),false);
@@ -97,13 +133,34 @@ test('native review buttons issue explicit pinned actions and disable undo after
     const selected=[];
     current={...task(),workflow:'team-generation-v1',request:'三端独立生成',retention:undefined,teamAnalysis:{rootSessionId:'native-lead',members:['plc','hmi','oip'].map(role=>({role,sessionId:'native-'+role,instruction:role+' 专业产物',componentDigest:digest,reportDigest:digest,report:{summary:role+' 原生产物回执',findings:['独立产物已生成'],unverified:['编译运行未测']}}))}};
     reactRoot.render(React.createElement(module.exports.ConversationReview,{sessionId:'chat-review',useTabInfo:()=>({tab:{navigation:{params:target}}}),onOverview:()=>{},onRetainedProject:id=>selected.push(id)}));
-    await wait();button('刷新').click();await wait();
+    await wait();button('刷新').click();await waitFor(()=>shown('PLC／HMI／OIP 独立产物')&&enabled('保留本轮修改'),'generation candidate must load');
     assert.ok(dom.window.document.body.textContent.includes('PLC／HMI／OIP 独立产物'));
     assert.ok(dom.window.document.body.textContent.includes('不是静态分析或运行证据'));
-    assert.equal(button('创建修改副本').disabled,false);button('创建修改副本').click();await wait();
-    const beforeNavigation=posts.length;button('打开修改副本').click();await wait();
+    assert.equal(button('保留本轮修改').disabled,false);button('保留本轮修改').click();await waitFor(()=>findButton('查看修改副本')&&editorOpens.length===2&&enabled('编译保留版本'),'generation keep and editor handoff must settle');
+    const beforeNavigation=posts.length;button('查看修改副本').click();
     assert.deepEqual(selected,['user-retained']);assert.equal(posts.length,beforeNavigation,'Runtime navigation must not send commands');
-    assert.equal([...dom.window.document.querySelectorAll('button')].some(b=>b.textContent==='放弃这次修改'),false);assert.equal(button('编译保留版本').disabled,false);
+    assert.equal([...dom.window.document.querySelectorAll('button')].some(b=>b.textContent==='撤销本轮'),false);assert.equal(button('编译保留版本').disabled,false);
     assert.equal(dom.window.document.body.textContent.includes('此任务为既有规则候选'),false);
+    current={...task(),workflow:'hmi-view-name-v1',request:'画面改名',retention:undefined,
+      candidate:{candidateDigest:digest,scope:'hmi-only',summary:{before:'旧画面',after:'车间画面'},
+      components:[{tool:'fuxa',summary:{before:'旧画面',after:'车间画面'}}],
+      changes:[{path:'hmi/main.fuxap',beforeSha256:'1'.repeat(64),afterSha256:'2'.repeat(64)}]}};
+    reactRoot.render(React.createElement(module.exports.ConversationReview,{sessionId:'chat-review',useTabInfo:()=>({tab:{navigation:{params:target}}}),onOverview:()=>{}}));await wait();button('刷新').click();await waitFor(()=>shown('仅重命名所选 FUXA 画面')&&enabled('保留本轮修改'),'HMI candidate must load');
+    assert.ok(dom.window.document.body.textContent.includes('仅重命名所选 FUXA 画面'));
+    assert.ok(dom.window.document.body.textContent.includes('车间画面'));assert.ok(dom.window.document.body.textContent.includes('旧画面 → 车间画面'));assert.equal(button('保留本轮修改').disabled,false);assert.deepEqual(errors,[]);
+    assert.equal([...dom.window.document.querySelectorAll('button')].some(b=>b.textContent==='在 OpenPLC 打开候选'),false);
+    const revisions=[],controller={snapshot:()=>({binding:{projectId},busy:false}),subscribe:()=>()=>{},revise:t=>revisions.push(t.taskId)};
+    current={...current,candidate:{...current.candidate,revisionSupported:true,target:{viewId:'v-a'}}};
+    reactRoot.render(React.createElement(module.exports.ConversationReview,{sessionId:'chat-review',contexts:{get:()=>controller},useTabInfo:()=>({tab:{navigation:{params:target}}}),onOverview:()=>{}}));await wait();button('刷新').click();await waitFor(()=>enabled('继续修改'),'revision controls must load');
+    assert.ok(dom.window.document.body.textContent.includes('只修改同一画面'));button('继续修改').click();assert.deepEqual(revisions,[taskId]);
+    current={...current,status:'no_change',candidate:{...current.candidate,revisionSupported:false,noChange:true,summary:{before:'旧画面',after:'旧画面'},changes:[]}};
+    button('刷新').click();await waitFor(()=>shown('最终内容与保存版本一致'),'no-change candidate must load');assert.ok(dom.window.document.body.textContent.includes('最终内容与保存版本一致'));assert.ok(dom.window.document.body.textContent.includes('与源保存版本无文件差异'));assert.equal(dom.window.document.body.textContent.includes('旧画面 → 旧画面'),false);assert.equal([...dom.window.document.querySelectorAll('button')].some(b=>['保留本轮修改','撤销本轮','编译保留版本','继续修改'].includes(b.textContent)),false);
+    current={...current,status:'awaiting_review',candidate:{...current.candidate,summary:{before:'旧画面',after:'车间画面'}}};
+    const hmiReviews=[];
+    reactRoot.render(React.createElement(module.exports.NativeToolCard,{phase:'result',toolName:'plcdev_propose_hmi_view_name',block:{content:[{type:'text',text:JSON.stringify({task:current})}],isError:false},onReviewTask:value=>hmiReviews.push(value)}));await waitFor(()=>shown('HMI 画面名称候选'),'HMI tool card must mount');
+    assert.ok(dom.window.document.body.textContent.includes('HMI 画面名称候选'));assert.ok(dom.window.document.body.textContent.includes('旧画面 → 车间画面'));assert.deepEqual(errors,[]);button('查看更改').click();assert.deepEqual(hmiReviews,[target]);
+    current={...current,candidate:{...current.candidate,summary:{before:{unexpected:true},after:'bad'},components:[{tool:'fuxa',summary:{before:{unexpected:true},after:'bad'}}]}};
+    reactRoot.render(React.createElement(module.exports.ConversationReview,{sessionId:'chat-review',useTabInfo:()=>({tab:{navigation:{params:target}}}),onOverview:()=>{}}));await waitFor(()=>shown('审阅修改')&&enabled('保留本轮修改'),'malformed-summary review must still load');
+    assert.ok(dom.window.document.body.textContent.includes('审阅修改'));assert.deepEqual(errors,[]);
   }finally{reactRoot.unmount();dom.window.close();for(const [key,value]of Object.entries(prior))Object.defineProperty(globalThis,key,{configurable:true,writable:true,value});}
 });

@@ -71,4 +71,10 @@ def all_descend_from(listeners,parents,root_pid):
 def listener_descends_from(port,root_pid):
     if type(root_pid) is not int or root_pid<=0:raise ValueError('Invalid tool process identity')
     listeners=listener_pids(port)
-    return all_descend_from(listeners,process_parents(),root_pid) if listeners else False
+    if not listeners:return False
+    # A process is its own ancestor. For an exact loopback listener PID the
+    # TCP table is sufficient; the caller still checks the full process
+    # identity (including creation time and image) before and after this call.
+    # Any additional listener still requires the complete ancestry snapshot.
+    if listeners=={root_pid}:return True
+    return all_descend_from(listeners,process_parents(),root_pid)

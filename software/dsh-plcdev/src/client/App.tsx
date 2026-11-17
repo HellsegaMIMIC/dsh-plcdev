@@ -1,211 +1,260 @@
+import {BrandTitle} from './Brand';
 import {conversationApi as api} from './conversation-client.mjs';
 import React, { useEffect, useRef, useState } from 'react';
-import { createReadGate, validateSnapshot, validateTasks, readPending, persistPending, makeCandidateRequest, definitiveFailure, candidateIdentity, canUseTool, externalRuntimeOwner, runtimeOwnerLabel, graphEntities, connectionLabel, taskStatus, selectionKey } from './model.mjs';
-import { openplcLogo, eezLogo } from './assets';
+import { createReadGate, validateSnapshot, validateTasks, readPending, persistPending, definitiveFailure, canUseTool, externalRuntimeOwner, runtimeOwnerLabel, graphEntities, taskStatus, selectionKey } from './model.mjs';
+import { eezLogo } from './assets';
+import {ToolLogo} from './ToolLogo';
 import { styles } from './styles';
-import { overviewLinks, overviewResources, monitoredVariables, overviewConnection, displayValue } from './overview-model.mjs';
+import { ProjectList, ConversationProjectPicker } from './ProjectList';
+import { ProjectSessions } from './ProjectSessions';
+import { RuntimePane } from './RuntimePane';
+import {RuntimeSummary} from './RuntimeRelation';
+import { ProjectOperations } from './ProjectOperations';
+import { overviewLinks, overviewResources, displayValue } from './overview-model.mjs';
+import { ConversationReview } from './Conversation';
+import { RuntimeActivity } from './RuntimeActivity';
+import { BackendConnection } from './BackendConnection';
+import { isBackendDisconnected, backendReadError } from './backend-state.mjs';
+import { readWorkspace, rememberWorkspace, projectLocationFor, workspaceLocation } from './workspace-navigation.mjs';
+import { workspaceStyles } from './workspace-styles';
+import { useProjectInspection, ProjectSignalList, ProjectSignalDetail, ProjectReadback } from './ProjectSignals';
+import {EditorSessionPicker} from './EditorSessionPicker';
+import {openResultInEditor,editorOpenNotice} from './result-flow.mjs';
+import {ToolDownloads,ToolDownloadEntry} from './ToolDownloads';
 
 const memoryStorage = { getItem: (_: string) => null, setItem: (_: string, __: string) => { throw new Error('本地存储不可用'); } };
 function storage() { try { return window.localStorage; } catch { return memoryStorage; } }
-function initialProject() { try { return storage().getItem(selectionKey) || ''; } catch { return ''; } }
+function initialProject() { try { return readWorkspace(storage()).current?.projectId || storage().getItem(selectionKey) || ''; } catch { return ''; } }
 const short = (value: any) => String(value || '').replace(/\\/g, '/').split('/').pop();
 const phaseLabel: any = { idle: '尚未准备', building: '编译准备中', ready: '实例就绪', stopping: '正在结束', ended: '已结束', fault: '需要处理' };
+const recoveryReason:any={pending:'请在原 FUXA 面板核对。旧版保留会写回当前 HMI 文件，撤销会恢复生成前内容；不会创建独立工程副本。',source_checkpoint_missing:'旧预览缺少源版本检查点；请先在 FUXA 核对基线。保留会写回当前 HMI 文件，不创建副本。',config_changed:'旧预览所属的工程配置已变化；请保留原事务并核对工程归属。',source_changed:'工程画面在预览后已变化；请保留原事务并核对源画面。',write_outcome_unknown:'上次写回结果未知；请保留现场核对，不要重试写回或撤销。',undo_outcome_unknown:'上次撤销预览的结果未知；请保留现场核对，不要重试写回或撤销。',transaction_outcome_unknown:'旧事务处理结果无法确认；请保留现场核对，不要重试写回或撤销。',native_write_unknown:'上次 FUXA 原生保存的结果未知；请保留现场并核对原生画面、设备设置和工程文件，不要重复保存或处理预览。',not_supported:'本工程的受管 FUXA 状态尚未提供。',transaction_unreadable:'事务记录或工程归属无法核对；请保留原记录。'};
 function Glyph({ kind = 'project', size = 24 }: { kind?: string; size?: number }) {
-  const paths: any = { project: 'M3 20V5h6l2 3h10v12Z', runtime: 'M6 6h12v12H6ZM9 9h6v6H9ZM8 2v4m8-4v4M8 18v4m8-4v4M2 8h4m-4 8h4m12-8h4m-4 8h4', scene: 'M3 16h18v5H3Zm3-8h5v6H6Zm8-5h5v11h-5M6 18v1m4-1v1m4-1v1m4-1v1', hmi: 'M3 3h18v14H3ZM12 17v4m-5 0h10M6 7h6m-6 4h3m4-4h5v6h-5', fuxa: 'M4 21V3h16M4 11h13', link: 'M3 7h18m-4-4 4 4-4 4M21 17H3m4-4-4 4 4 4', tasks: 'M6 3h15v18H6ZM3 7h6m-6 5h6m-6 5h6M12 7h6m-6 5h6m-6 5h6', open: 'M14 3h7v7M21 3 10 14M10 3H4v17h17v-6' };
-  if (kind === 'plc' || kind === 'eez') return <img className="pd-logo" width={size} height={size} src={kind === 'plc' ? openplcLogo : eezLogo} alt="" />;
+  const paths: any = { project: 'M3 20V5h6l2 3h10v12Z', runtime: 'M6 6h12v12H6ZM9 9h6v6H9ZM8 2v4m8-4v4M8 18v4m8-4v4M2 8h4m-4 8h4m12-8h4m-4 8h4', scene: 'M3 16h18v5H3Zm3-8h5v6H6Zm8-5h5v11h-5M6 18v1m4-1v1m4-1v1m4-1v1', hmi: 'M3 3h18v14H3ZM12 17v4m-5 0h10M6 7h6m-6 4h3m4-4h5v6h-5', fuxa: 'M4 21V3h16M4 11h13', link: 'M3 7h18m-4-4 4 4-4 4M21 17H3m4-4-4 4 4 4', settings: 'M4 6h16M4 12h16M4 18h16M8 3v6m8 0v6M10 15v6', tasks: 'M6 3h15v18H6ZM3 7h6m-6 5h6m-6 5h6M12 7h6m-6 5h6m-6 5h6', open: 'M14 3h7v7M21 3 10 14M10 3H4v17h17v-6' };
+  if (['plc','openplc','fuxa','oip'].includes(kind)) return <ToolLogo tool={kind} size={size}/>;
+  if (kind === 'eez') return <img className="pd-logo" width={size} height={size} src={eezLogo} alt="" />;
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[kind] || paths.project}/></svg>;
 }
-export function PlcdevIcon() { return <Glyph kind="runtime" size={20}/>; }
 
-function Topology({ snapshot, connected, selected, onSelect, onOpen, busy }: any) {
-  const viewport = useRef<HTMLDivElement>(null), [canvasHeight,setCanvasHeight]=useState(320);
+export function App({contexts,projectContexts,hostSessions,openSession,getPicker,closePicker,onCreateSession,onCarryReference,onReturnToSession,onContinueRetained,onOpenEditorSession,onOpenResultResource,runtimeActivity,onOpenRuntime,getWorkspaceIntent,clearWorkspaceIntent}:any = {}) {
+  const workspace=useRef(readWorkspace(storage()));
+  const initialIntent=useRef(workspaceLocation(getWorkspaceIntent?.()));
+  const [view,setView]=useState(()=>initialIntent.current?.view||workspace.current.current?.view||'resources');
+  const [picker,setPicker]=useState<any>(()=>getPicker?.()||null),[catalog,setCatalog]=useState(()=>initialIntent.current?false:workspace.current.catalog);
+  const [projectId,setProjectId]=useState(()=>initialIntent.current?.projectId||initialProject());
+  const [projects,setProjects]=useState<any[]>([]),[snapshot,setSnapshot]=useState<any>(null),[connected,setConnected]=useState(false);
+  const [statusError,setStatusError]=useState(''),[statusCode,setStatusCode]=useState(''),[tasks,setTasks]=useState<any>(null),[taskError,setTaskError]=useState('');
+  const [fuxaRecovery,setFuxaRecovery]=useState<any>(null),[selected,setSelected]=useState<string|null>(()=>workspace.current.current?.selected||null);
+  const [review,setReview]=useState<any>(()=>workspace.current.current?.review||null),[back,setBack]=useState<any[]>([]),[returnSession,setReturnSession]=useState<string|null>(null);
+  const [message,setMessage]=useState(''),[refresh,setRefresh]=useState(0),[busy,setBusy]=useState(false),[pendingVersion,setPendingVersion]=useState(0);
+  const [environment,setEnvironment]=useState(false),[createdProject,setCreatedProject]=useState<string|null>(null);
+  const [editorPicker,setEditorPicker]=useState<any>(null);
+  const [configurationSection,setConfigurationSection]=useState('interface');
+  const editorOpening=useRef(false);
+  const rootElement=useRef<HTMLElement>(null),scrollElement=useRef<HTMLDivElement>(null),[compact,setCompact]=useState(false),[detailHeight,setDetailHeight]=useState(640);
+  const opener=useRef<HTMLElement|null>(null),detailOrigin=useRef<any>(null),pendingRestore=useRef<any>(workspace.current.current),catalogOrigin=useRef<any>(null),lastScroll=useRef(0),creating=useRef(false);
+  const location=()=>workspaceLocation({projectId,view,selected,review,scroll:scrollElement.current?.scrollTop??lastScroll.current});
+  const locationRef=useRef<any>(null);locationRef.current={projectId,view,selected,review,catalog};
+  const gate=useRef(createReadGate()),pending=useRef(readPending(storage())),pendingBusy=useRef(new Set<string>());
+  const activeRef=useRef<any>({projectId,snapshot:null,connected:false}),client=useRef('dsh-'+crypto.randomUUID()),sequence=useRef(0),alive=useRef(true);
+  const inspection=useProjectInspection(projectId,connected&&projectId!=='catalog');
+  useEffect(()=>{alive.current=true;return()=>{alive.current=false;gate.current.select('');};},[]);
+  useEffect(()=>{setEditorPicker(null);setConfigurationSection('interface');},[projectId]);
+  useEffect(()=>{const update=()=>{const next=getPicker?.()||null;if(next&&scrollElement.current){const origin=workspaceLocation({...locationRef.current,scroll:scrollElement.current.scrollTop});if(origin){lastScroll.current=origin.scroll;pendingRestore.current=origin;workspace.current=rememberWorkspace(storage(),workspace.current,origin,false);}}setPicker(next);};window.addEventListener('plcdev:picker-changed',update);return()=>window.removeEventListener('plcdev:picker-changed',update);},[getPicker]);
+  useEffect(()=>{const node=rootElement.current,content=scrollElement.current;if(!node)return;const resize=()=>{setCompact(node.clientWidth<760);if(content?.clientHeight){const style=getComputedStyle(content);setDetailHeight(Math.max(1,content.clientHeight-parseFloat(style.paddingTop||'0')-parseFloat(style.paddingBottom||'0')));}};resize();const observer=new ResizeObserver(resize);observer.observe(node);if(content)observer.observe(content);return()=>observer.disconnect();},[catalog,picker]);
+  useEffect(()=>{const escape=(event:KeyboardEvent)=>{if(event.key!=='Escape'||picker)return;if(environment)setEnvironment(false);else if(catalog&&catalogOrigin.current)cancelCatalog();else if(review||selected)closeDetail();};document.addEventListener('keydown',escape);return()=>document.removeEventListener('keydown',escape);},[picker,environment,catalog,review,selected]);
+  useEffect(()=>{const applyIntent=(detail:any)=>{const id=detail?.projectId;if(typeof id!=='string'||!/^[a-z][a-z0-9-]{0,63}$/.test(id))return;if(detail.restore===true)restoreLocation(detail);else {switchProject(id,detail.view||'resources',true);if(typeof detail.selected==='string'&&detail.selected.length<=240)setSelected(detail.selected);}setReturnSession(typeof detail.returnTo?.sessionId==='string'?detail.returnTo.sessionId:null);clearWorkspaceIntent?.(detail);};const select=(event:Event)=>applyIntent((event as CustomEvent).detail);window.addEventListener('plcdev:select-project',select);const intent=getWorkspaceIntent?.();if(intent)applyIntent(intent);return()=>window.removeEventListener('plcdev:select-project',select);},[projectId,view,selected,review,getWorkspaceIntent,clearWorkspaceIntent]);
+  useEffect(()=>{const restoring=pendingRestore.current,current=restoring?.projectId===projectId&&restoring.view===view?restoring:location();if(current)workspace.current=rememberWorkspace(storage(),workspace.current,current,catalog);},[projectId,view,selected,review,catalog]);
+  useEffect(()=>()=>{const current=pendingRestore.current||workspaceLocation({...locationRef.current,scroll:scrollElement.current?.scrollTop??lastScroll.current});if(current)workspace.current=rememberWorkspace(storage(),workspace.current,current,locationRef.current.catalog);},[]);
+  // Viewing another project only changes the UI. No binding or Runtime command is sent.
   useEffect(()=>{
-    const view=viewport.current;if(!view)return;
-    const resize=()=>{if(view.clientHeight>0)setCanvasHeight(Math.max(296,Math.min(396,view.clientHeight-12)));};
-    resize();const observer=new ResizeObserver(resize);observer.observe(view);return()=>observer.disconnect();
-  },[]);
-  const entities = graphEntities(snapshot), links = overviewLinks(snapshot);
-  const complex = entities.some((e: any) => e.id === 'designer' || e.id === 'scene');
-  const upper=8,lower=canvasHeight-124,level=Math.round((canvasHeight-116)/2),mid=lower+58;
-  const deliveryLabel=Math.round((upper+116+lower)/2)-22;
-  const positions: any = complex ? {designer:[4,upper],plc:[40,upper],hmi:[4,lower],runtime:[40,lower],scene:[76,lower]} : {plc:[20,level],runtime:[60,level]};
-  const routes: any = complex ? {generate:[`M140 ${upper+116}V${lower}`,15.5,deliveryLabel],load:[`M500 ${upper+116}V${lower}`,51.5,deliveryLabel],variables:[`M240 ${mid}H400`,27,mid-22],io:[`M600 ${mid}H760`,63,mid-22]} : {load:[`M400 ${level+58}H600`,44,level+36]};
-  const selectedLink = links.find((l: any) => l.id === selected);
-  const selectedNodes = selectedLink?.nodes || [selected];
-  useEffect(() => {
-    const view = viewport.current, node = view?.querySelector<HTMLElement>(`[data-node="${selectedNodes[0]}"]`);
-    if (view && node) view.scrollLeft = Math.max(0,node.offsetLeft + node.offsetWidth / 2 - view.clientWidth / 2);
-  }, [selected]);
-  return <div className="pd-canvas-scroll" ref={viewport}><div className={'pd-canvas '+(complex?'':'pd-local')} style={{height:canvasHeight}}>
-    <svg className="pd-wires" viewBox={`0 0 1000 ${canvasHeight}`} preserveAspectRatio="none" aria-hidden="true">{links.map((link: any) => {const status=overviewConnection(snapshot,link.key,connected);return <path key={link.id} className={'pd-wire pd-'+status.tone+(selected===link.id?' selected':'')+(['load','generate'].includes(link.key)?' delivery':'')} d={routes[link.key][0]}/>;})}</svg>
-    {links.map((link: any) => {const status=overviewConnection(snapshot,link.key,connected),route=routes[link.key];return <button key={link.id} data-edge={link.key} className={'pd-edge pd-'+status.tone+(selected===link.id?' selected':'')} style={{left:route[1]+'%',top:route[2]}} onClick={()=>onSelect(link.id)} aria-pressed={selected===link.id}><span>{link.title}</span><small>{status.label}</small></button>;})}
-    {entities.map((entity: any) => {
-      const [left,top]=positions[entity.id];
-      const toolAllowed=entity.tool ? canUseTool(snapshot,snapshot.project.id,entity.tool,connected) : entity.hmi && connected && snapshot?.capabilities?.[snapshot?.hmiOpen&&!entity.fuxa?'canReconnectHmi':'canShowHmi']===true;
-      const component=entity.component||{};
-      const label=connected ? component.label || ({available:'入口可用 · 窗口未确认',unavailable:'工具未安装','launch-requested':'已请求打开','process-alive':'进程存在','launch-failed':'打开失败'} as any)[component.state] || (entity.id==='runtime'?phaseLabel[snapshot.phase]:'状态未确认') : '状态未知';
-      const related=selectedNodes.includes(entity.id);
-      const ports=links.flatMap((l:any)=>{if(l.source!==entity.id&&l.target!==entity.id)return [];if(complex&&['load','generate'].includes(l.key))return [l.source===entity.id?'bottom':'top'];return [l.source===entity.id?'right':'left'];});
-      return <article key={entity.id} data-node={entity.id} style={{left:left+'%',top}} className={'pd-entity'+(related?selectedLink?' pd-related':' pd-selected':'')}>
-        <button className="pd-entity-body" onClick={()=>onSelect(entity.id)} aria-label={'查看 '+entity.title+' 属性'} aria-pressed={related}><div className="pd-entity-title"><Glyph kind={entity.icon} size={25}/><strong>{entity.title}</strong></div><span className="pd-entity-role">{entity.role}</span><span className="pd-entity-file">{short(entity.path)||snapshot.project.name}</span><span className="pd-entity-state"><i className={connected&&component.state==='available'?'pd-dot good':'pd-dot'}/>{String(label||'状态未确认').replace(/会话/g,'运行实例')}</span></button>
-        {(entity.tool||entity.hmi)&&<button className="pd-entity-open" disabled={!toolAllowed||busy} onClick={()=>onOpen(entity)} aria-label={'打开 '+entity.title} title={toolAllowed?'打开工程入口':snapshot?.capabilities?.reasons?.[entity.tool]||'当前状态不允许打开'}><Glyph kind="open" size={14}/></button>}
-        {[...new Set(ports)].map((port:any)=><span key={port} className={'pd-port '+port}/>)}
-      </article>;
-    })}
-  </div></div>;
-}
-
-export function App() {
-  const [projectId, setProjectId] = useState(initialProject);
-  const [projects, setProjects] = useState<any[]>([]), [snapshot, setSnapshot] = useState<any>(null), [connected, setConnected] = useState(false);
-  const [statusError, setStatusError] = useState(''), [tasks, setTasks] = useState<any>(null), [taskError, setTaskError] = useState('');
-  const [tab, setTab] = useState('status'), [selected, setSelected] = useState('plc'), [request, setRequest] = useState(''), [consent, setConsent] = useState(false);
-  const [message, setMessage] = useState(''), [refresh, setRefresh] = useState(0), [busy, setBusy] = useState(false), [pendingVersion, setPendingVersion] = useState(0);
-  const [infoCollapsed,setInfoCollapsed]=useState(true),[infoHeight,setInfoHeight]=useState(250),[menu,setMenu]=useState(''),[environment,setEnvironment]=useState(false);
-  const menuRoot=useRef<HTMLElement>(null),resizeStart=useRef<{y:number;height:number}|null>(null);
-  const rootElement = useRef<HTMLElement>(null), [compact, setCompact] = useState(false);
-  const gate = useRef(createReadGate()), pending = useRef(readPending(storage())), pendingBusy = useRef(new Set<string>()), activeRef = useRef<any>({ projectId, snapshot: null, connected: false }), client = useRef('dsh-' + crypto.randomUUID()), sequence = useRef(0), alive = useRef(true);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; gate.current.select(''); }; }, []);
-  useEffect(() => {
-    const node = rootElement.current; if (!node) return;
-    let previous: boolean | undefined;
-    const resize = () => { const narrow = node.clientWidth < 760; setCompact(narrow); previous = narrow; };
-    resize(); const observer = new ResizeObserver(resize); observer.observe(node); return () => observer.disconnect();
-  }, []);
-  useEffect(()=>{
-    const outside=(event:PointerEvent)=>{if(menuRoot.current&&!menuRoot.current.contains(event.target as Node))setMenu('');};
-    const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){setMenu('');setEnvironment(false);}};
-    document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape);
-    return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape);};
-  },[]);
-  useEffect(()=>{
-    const select=(event:Event)=>{const id=(event as CustomEvent).detail?.projectId;if(typeof id==='string'&&/^[a-z][a-z0-9-]{0,63}$/.test(id))switchProject(id);};
-    window.addEventListener('plcdev:select-project',select);return()=>window.removeEventListener('plcdev:select-project',select);
-  },[projects,projectId]);
-  // Closing this panel only cancels reads. Runtime lifecycle belongs to the workbench service.
-  useEffect(() => {
-    gate.current.select(projectId); let disposed = false, statusTimer: any, taskTimer: any;
-    setSnapshot(null); setConnected(false); setTasks(null); setStatusError(''); setTaskError(''); setMessage(''); setConsent(false); setRequest(''); setSelected('plc'); setBusy(false); setMenu(''); setInfoCollapsed(true);
-    activeRef.current = { projectId, snapshot: null, connected: false };
-    if (projectId) { try { storage().setItem(selectionKey, projectId); } catch {} }
-    async function readStatus() {
-      const ticket = gate.current.begin('status');
-      try {
-        const value = validateSnapshot(await api('status' + (projectId ? '?project=' + encodeURIComponent(projectId) : '')), projectId);
-        if (disposed || !gate.current.accepts(ticket)) return;
-        setProjects(value.projects); if (!projectId) { setProjectId(value.project.id); return; }
-        setSnapshot(value); setConnected(true); setStatusError(''); activeRef.current = { projectId, snapshot: value, connected: true };
-      } catch (error: any) {
-        if (disposed || !gate.current.accepts(ticket)) return;
-        setSnapshot(null); setConnected(false); setStatusError(error.name === 'AbortError' ? '后台响应超时。已停用入口操作。' : error.message); activeRef.current = { projectId, snapshot: null, connected: false };
-      } finally { if (!disposed) statusTimer = setTimeout(readStatus, 1500); }
-    }
-    async function readTasks() {
-      if (!projectId) return;
-      const ticket = gate.current.begin('tasks');
-      try {
-        const value = validateTasks(await api('tasks?project=' + encodeURIComponent(projectId), undefined, 60000), projectId);
-        if (disposed || !gate.current.accepts(ticket)) return;
-        setTasks(value); setTaskError('');
-      } catch (error: any) {
-        if (disposed || !gate.current.accepts(ticket)) return;
-        setTasks(null); setTaskError(error.name === 'AbortError' ? '任务查询超时，候选操作已停用。' : error.message);
-      } finally { if (!disposed) taskTimer = setTimeout(readTasks, 3000); }
-    }
-    readStatus(); readTasks();
-    return () => { disposed = true; clearTimeout(statusTimer); clearTimeout(taskTimer); };
-  }, [projectId, refresh]);
-  // Expire communication colours even while a status request is taking longer.
-  const [, tick] = useState(0); useEffect(() => { const id = setInterval(() => tick(n => n + 1), 750); return () => clearInterval(id); }, []);
-
-  function switchProject(id: string) {
-    if (id === projectId) return;
-    gate.current.select(id); activeRef.current = { projectId: id, snapshot: null, connected: false }; setSnapshot(null); setConnected(false); setTasks(null); setMessage(''); setProjectId(id);
-  }
-  async function openEntity(entity: any) {
-    const context = activeRef.current, p = context.projectId, s = context.snapshot;
-    if (busy || !context.connected || s?.project?.id !== p) return;
-    const body: any = { projectId: p, sessionId: s.session?.id ?? s.sessionId ?? null, client: client.current, sequence: ++sequence.current, expires: Date.now() / 1000 + 12 };
-    if (entity.tool) { if (!canUseTool(s, p, entity.tool, true)) return; body.action = 'tool'; body.tool = entity.tool; }
-    else if (entity.hmi) { const cap = s.hmiOpen && !entity.fuxa ? 'canReconnectHmi' : 'canShowHmi'; if (!s.capabilities?.[cap]) return; body.action = entity.fuxa ? 'open-hmi' : s.hmiOpen ? 'reopen-hmi' : 'show-hmi'; }
-    else return;
-    const ticket = gate.current.begin('action');
-    setBusy(true); setMessage('正在打开 ' + entity.title + '…');
-    try {
-      const result = await api('action', body, 30000); if (!result.ok) throw new Error('服务未确认入口打开结果。');
-      if (alive.current && gate.current.accepts(ticket)) setMessage('已请求打开 ' + entity.title + '。进程存在不代表场景或 PLC 已运行。');
-    } catch (error: any) { if (alive.current && gate.current.accepts(ticket)) setMessage(definitiveFailure(error) ? '未能打开：' + error.message : '打开结果尚未确认，请检查工具窗口。' + error.message); }
-    finally { if (alive.current && gate.current.accepts(ticket)) setBusy(false); }
-  }
-  function savePending() { persistPending(storage(), pending.current); setPendingVersion(n => n + 1); }
-  async function createTask(event: React.FormEvent) {
-    event.preventDefault();
-    const context = activeRef.current, p = context.projectId;
-    if (!context.connected || context.snapshot?.project?.id !== p || tasks?.projectId !== p || !tasks.projectRevision || pendingBusy.current.has(p)) return;
-    let body = pending.current.get(p);
-    try {
-      if (!body) {
-        if (!tasks.capabilities?.savedRevisionCandidate) return;
-        body = makeCandidateRequest({ projectId: p, request, revision: tasks.projectRevision, consent, clientRequestId: crypto.randomUUID() });
-        pending.current.set(p, body);
-        try { savePending(); } catch { pending.current.delete(p); throw new Error('浏览器无法保存请求恢复记录，未发送任务。请允许此站点本地存储。'); }
+    gate.current.select(projectId);let disposed=false,statusTimer:any,taskTimer:any;
+    setSnapshot(null);setConnected(false);setTasks(null);setStatusError('');setStatusCode('');setTaskError('');setMessage('');setBusy(false);
+    activeRef.current={projectId,snapshot:null,connected:false};
+    if(projectId){try{storage().setItem(selectionKey,projectId);}catch{}}
+    async function readStatus(){
+      const ticket=gate.current.begin('status');
+      try{
+        const requested=projectId==='catalog'?'':projectId;
+        const value=validateSnapshot(await api('status'+(requested?'?project='+encodeURIComponent(requested):'')),requested);
+        if(disposed||!gate.current.accepts(ticket))return;
+        setProjects(value.projects);if(value.catalogOnly)setCatalog(true);if(!projectId||projectId==='catalog'&&value.project.id!=='catalog'){setProjectId(value.project.id);return;}
+        setSnapshot(value);setConnected(true);setStatusError('');setStatusCode('');activeRef.current={projectId,snapshot:value,connected:true};
+      }catch(error:any){
+        if(disposed||!gate.current.accepts(ticket))return;
+        setSnapshot(null);setConnected(false);setStatusCode(error.code||'');setStatusError(error.name==='AbortError'?'后台响应超时，操作暂不可用。':backendReadError(error));activeRef.current={projectId,snapshot:null,connected:false};
+        // A removed or migrated remembered project must not hide the catalog.
+        // Use only the independent listing: never adopt its default project's
+        // identity, connection, capabilities or pending operation context.
+        if(projectId)try{
+          const listing=validateSnapshot(await api('status'),'');
+          if(!disposed&&gate.current.accepts(ticket))setProjects(listing.projects);
+        }catch{/* Keep the original failure and all operations disabled. */}
       }
-    } catch (error: any) { setMessage(error.message); return; }
-    const ticket = gate.current.begin('create');
-    pendingBusy.current.add(p); setPendingVersion(n => n + 1); setMessage('正在创建候选任务…');
-    try {
-      const result = await api('tasks', body, 65000);
-      if (result.task?.projectId !== p || !result.task?.taskId) throw new Error('服务未确认同一工程的任务身份。');
-      pending.current.delete(p); savePending();
-      if (alive.current && gate.current.accepts(ticket)) { setConsent(false); setRequest(''); setMessage('候选任务已创建，原工程保持不变。'); setTasks(null); }
-    } catch (error: any) {
-      if (definitiveFailure(error)) { pending.current.delete(p); try { savePending(); } catch {} }
-      if (alive.current && gate.current.accepts(ticket)) setMessage(definitiveFailure(error) ? '任务未创建：' + error.message : '提交结果尚未确认。请先核对列表；重试将沿用同一请求编号和原保存版本。');
-    } finally { pendingBusy.current.delete(p); if (alive.current) setPendingVersion(n => n + 1); }
+      finally{if(!disposed)statusTimer=setTimeout(readStatus,1500);}
+    }
+    async function readTasks(){
+      if(!projectId||projectId==='catalog')return;const ticket=gate.current.begin('tasks');
+      try{const value=validateTasks(await api('tasks?project='+encodeURIComponent(projectId),undefined,60000),projectId);if(disposed||!gate.current.accepts(ticket))return;setTasks(value);setTaskError('');}
+      catch(error:any){if(disposed||!gate.current.accepts(ticket))return;setTasks(null);setTaskError(error.name==='AbortError'?'修改记录读取超时。':error.message);}
+      finally{if(!disposed)taskTimer=setTimeout(readTasks,3000);}
+    }
+    readStatus();readTasks();return()=>{disposed=true;clearTimeout(statusTimer);clearTimeout(taskTimer);};
+  },[projectId,refresh]);
+  const hasFuxa=!!snapshot&&['fuxa-oip','fuxa-local'].includes(snapshot.project?.defaultMode);
+  useEffect(()=>{
+    let disposed=false,timer:any;setFuxaRecovery(null);if(!projectId||!hasFuxa)return;
+    async function readRecovery(){
+      const ticket=gate.current.begin('fuxa-recovery');
+      try{const result=await api('fuxa-recovery?project='+encodeURIComponent(projectId));if(disposed||!gate.current.accepts(ticket))return;
+        if(result.ok!==true||result.projectId!==projectId||!['none','pending','conflict','unavailable'].includes(result.state)||(result.state!=='none'&&!recoveryReason[result.reasonCode]))throw new Error('旧预览归属或状态未确认。');setFuxaRecovery(result);
+      }catch{if(!disposed&&gate.current.accepts(ticket))setFuxaRecovery({projectId,state:'unavailable',reasonCode:'transaction_unreadable'});}
+      finally{if(!disposed)timer=setTimeout(readRecovery,5000);}
+    }
+    readRecovery();return()=>{disposed=true;clearTimeout(timer);};
+  },[projectId,refresh,hasFuxa]);
+  const [,tick]=useState(0);useEffect(()=>{const id=setInterval(()=>tick(n=>n+1),750);return()=>clearInterval(id);},[]);
+  function saveLocation(){const current=location();pendingRestore.current=null;if(current){lastScroll.current=current.scroll;workspace.current=rememberWorkspace(storage(),workspace.current,current,catalog);}return current;}
+  function cancelPendingRestore(){if(!pendingRestore.current)return;saveLocation();}
+  function restoreLocation(target:any){const valid=workspaceLocation(target);if(!valid)return;detailOrigin.current=null;lastScroll.current=valid.scroll;pendingRestore.current=valid;setCatalog(false);setView(valid.view);setSelected(valid.selected);setReview(valid.review);if(valid.projectId!==projectId){gate.current.select(valid.projectId);activeRef.current={projectId:valid.projectId,snapshot:null,connected:false};setSnapshot(null);setConnected(false);setTasks(null);setMessage('');setProjectId(valid.projectId);}}
+  function switchProject(id:string,targetView?:string,record=true){
+    if(!id||!/^[a-z][a-z0-9-]{0,63}$/.test(id))return;const origin=catalogOrigin.current||saveLocation();catalogOrigin.current=null;
+    if(record&&origin&&origin.projectId!==id)setBack(items=>[...items,origin].slice(-8));
+    const target=projectLocationFor(workspace.current,id,targetView);if(target)restoreLocation(target);
   }
-  async function openCandidate(task: any) {
-    const context = activeRef.current, p = context.projectId;
-    if (!context.connected || tasks?.projectId !== p || !tasks.tasks.includes(task) || busy) return;
-    const body = candidateIdentity(task, p); if (!body) return;
-    const ticket = gate.current.begin('action');
-    setBusy(true); setMessage('正在核对候选摘要并打开独立副本…');
-    try {
-      const result = await api('tasks/open', body, 65000);
-      if (!result.ok || result.projectId !== p || result.taskId !== body.taskId || result.candidateDigest !== body.candidateDigest) throw new Error('候选打开身份未获确认。');
-      if (alive.current && gate.current.accepts(ticket)) setMessage('已请求在 OpenPLC 打开该候选副本，请在编辑器中审阅。');
-    } catch (error: any) { if (alive.current && gate.current.accepts(ticket)) setMessage(definitiveFailure(error) ? '候选未打开：' + error.message : '候选打开结果尚未确认，请先检查 OpenPLC 窗口再重试。'); }
-    finally { if (alive.current && gate.current.accepts(ticket)) setBusy(false); }
+  function changeView(next:string){saveLocation();restoreLocation(projectLocationFor(workspace.current,projectId,next));}
+  function openCatalog(){catalogOrigin.current=saveLocation();opener.current=document.activeElement as HTMLElement;setCatalog(true);}
+  function cancelCatalog(){const origin=catalogOrigin.current;catalogOrigin.current=null;if(origin)restoreLocation(origin);requestAnimationFrame(()=>{if(opener.current?.isConnected)opener.current.focus();else rootElement.current?.querySelector<HTMLElement>('.pd-project-switch')?.focus({preventScroll:true});});}
+  function closeDetail(){const origin=detailOrigin.current;detailOrigin.current=null;setReview(null);setSelected(null);requestAnimationFrame(()=>{if(origin?.projectId===projectId&&origin.view===view&&scrollElement.current){scrollElement.current.scrollTop=origin.scroll;lastScroll.current=origin.scroll;}const focus=origin?.element||opener.current;if(focus?.isConnected)focus.focus({preventScroll:true});});}
+  function rememberDetailOrigin(){pendingRestore.current=null;opener.current=document.activeElement as HTMLElement;detailOrigin.current={projectId,view,scroll:scrollElement.current?.scrollTop||0,element:opener.current};}
+  function showResource(id:string){rememberDetailOrigin();setReview(null);setSelected(id);}
+  function showReview(target:any){if(target?.projectId!==projectId||!target.sessionId||!target.taskId)return;rememberDetailOrigin();setSelected(null);setReview(target);}
+  async function navigateSession(target:any){saveLocation();window.dispatchEvent(new CustomEvent('plcdev:workspace-origin',{detail:{...location(),sessionId:target.sessionId}}));const result=await openSession?.(target);if(result&&result.ok!==true)setMessage(result.message||'会话跳转结果未确认。');return result||{ok:false,message:'宿主会话导航尚未就绪。'};}
+  function rememberSessionOrigin(sessionId?:string){const origin=saveLocation();if(origin)window.dispatchEvent(new CustomEvent('plcdev:workspace-origin',{detail:{...origin,...(sessionId?{sessionId}:{})}}));}
+  async function createSession(){if(creating.current||!onCreateSession||!projectId)return;creating.current=true;rememberSessionOrigin();const current=projectId;try{const result=await onCreateSession(projectId);if(alive.current&&activeRef.current.projectId===current&&result?.ok===false)setMessage(result.message||'新会话创建结果未确认。');}catch(e:any){if(alive.current&&activeRef.current.projectId===current)setMessage(e.message||'新会话创建结果未确认。');}finally{creating.current=false;}}
+  async function carryReference(id:string,reference:any){if(!onCarryReference||id!==projectId)return {ok:false,message:'当前工程已变化，请重新选择信号。'};rememberSessionOrigin();return onCarryReference(id,reference);}
+  function goBack(){const target=back.at(-1);if(target){setBack(items=>items.slice(0,-1));restoreLocation(target);}}
+  useEffect(()=>{
+    if(catalog||picker||!snapshot||snapshot.project?.id!==projectId)return;
+    const saved=pendingRestore.current;if(saved?.projectId!==projectId||saved.view!==view)return;
+    // Status arrives before saved signal/readback data. Restoring against that
+    // shorter DOM clamps scrollTop and loses the user's origin permanently.
+    if(view==='resources'&&((tasks?.projectId!==projectId&&!taskError)||(!inspection.data&&!inspection.error)||(hasFuxa&&fuxaRecovery?.projectId!==projectId)))return;
+    requestAnimationFrame(()=>{if(pendingRestore.current!==saved||!scrollElement.current)return;pendingRestore.current=null;scrollElement.current.scrollTop=saved.scroll;lastScroll.current=scrollElement.current.scrollTop;if(saved.selected)[...(rootElement.current?.querySelectorAll<HTMLElement>('[data-resource]')||[])].find(node=>node.dataset.resource===saved.selected)?.focus({preventScroll:true});});
+  },[snapshot,projectId,catalog,picker,view,tasks,taskError,inspection.data,inspection.error,hasFuxa,fuxaRecovery]);
+  async function openLinkedEditor(conversationId:string,explicitProject=projectId){
+    if(editorOpening.current)return;
+    editorOpening.current=true;
+    const ticket=gate.current.begin('action');setBusy(true);setMessage('正在连接工程会话并打开 OpenPLC…');
+    try{const result=await openResultInEditor({api,conversationId,projectId:explicitProject,target:'project',isCurrent:()=>alive.current&&gate.current.accepts(ticket),onState:(value:any)=>setMessage(editorOpenNotice(value))});
+      if(alive.current&&gate.current.accepts(ticket)){setEditorPicker(null);if(result.state==='requested')setMessage('已请求打开，OpenPLC 尚未确认工程加载。');}
+    }catch(error:any){if(alive.current&&gate.current.accepts(ticket))setMessage(error?.message||'编辑器连接未能确认。');}
+    finally{editorOpening.current=false;if(alive.current&&gate.current.accepts(ticket))setBusy(false);}
   }
-
-  const current = snapshot?.project || projects.find(p=>p.id===projectId), entities = graphEntities(snapshot);
-  const detail:any = entities.find((n:any)=>n.id===selected), links=overviewLinks(snapshot), selectedLink=links.find((l:any)=>l.id===selected);
-  const groups=overviewResources(snapshot,tasks), selectedCategory=groups.find((g:any)=>g.items.some((r:any)=>r.id===selected||r.nodes.includes(selected)));
-  const selectedTask=tasks?.projectId===projectId?tasks.tasks.find((t:any)=>'task:'+t.taskId===selected):null;
-  const waiting=pending.current.get(projectId),taskBusy=pendingBusy.current.has(projectId),readyTasks=connected&&tasks?.projectId===projectId;
-  const session=snapshot?.session,otherSessions=snapshot?.otherSessions||[],taskCount=tasks?.projectId===projectId?tasks.tasks.length:null,externalOwner=externalRuntimeOwner(snapshot);
-  const variables=monitoredVariables(snapshot,connected);
-  const instanceLabel=connected ? session?.active ? snapshot.observerFresh?snapshot.state?.runtimeState||'状态未确认':'状态失效' : phaseLabel[snapshot?.phase]||'未创建' : '状态未知';
-  function selectResource(id:string){setSelected(id);setMenu('');setTab(id.startsWith('task:')?'tasks':'status');setInfoCollapsed(false);}
-  function requestConversation(){window.dispatchEvent(new CustomEvent('plcdev:open-conversation',{detail:{projectId}}));}
-  function reviewTask(task:any){if(task.projectId!==projectId)return;selectResource('task:'+task.taskId);window.dispatchEvent(new CustomEvent('plcdev:review-task',{detail:{projectId,taskId:task.taskId}}));}
-  return <section ref={rootElement} className={'pd-root pd-d2 '+(compact?'pd-compact':'')} data-pending-version={pendingVersion}><style>{styles}</style>
-    <header className="pd-header"><div className="pd-project-control"><PlcdevIcon/><div><label htmlFor="plcdev-project-select">PLCdev · 当前工程</label><select id="plcdev-project-select" aria-label="选择工程" value={projectId} onChange={e=>switchProject(e.target.value)} disabled={!projects.length}>{!projects.some(p=>p.id===projectId)&&<option value={projectId}>{statusError?'工程读取失败':'正在读取工程清单…'}</option>}{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></div><span className="pd-saved">{readyTasks?'保存版本 '+tasks.projectRevision.slice(0,8):'版本待确认'}</span></div><div className="pd-header-right"><span className={'pd-connection '+(connected?'good':'')}><i className={'pd-dot '+(connected?'good':'')}/>{connected?'后台已连接':statusError?'后台未连接':'正在连接'}</span><button onClick={()=>setRefresh(n=>n+1)} aria-label="刷新工程状态">刷新</button><button className="pd-primary" disabled={!connected||!projectId} onClick={requestConversation}>工程对话 ↗</button></div></header>
-    <nav className="pd-resources" ref={menuRoot} aria-label="当前工程资源">{groups.map((group:any)=><div className="pd-resource-group" key={group.id}><button className={'pd-resource-trigger'+(selectedCategory?.id===group.id?' selected':'')} onClick={()=>setMenu(menu===group.id?'':group.id)} aria-expanded={menu===group.id} aria-controls={'pd-menu-'+group.id}><Glyph kind={group.icon} size={16}/>{group.label}<small>{group.items.length}</small><span>⌄</span></button>{menu===group.id&&<div className="pd-resource-menu" id={'pd-menu-'+group.id}><div className="pd-resource-caption">{current?.name||'未选择工程'} · {group.label}</div>{group.items.length?group.items.map((item:any)=><button key={item.id} data-resource={item.id} aria-pressed={selected===item.id} onClick={()=>selectResource(item.id)}><Glyph kind={item.icon} size={17}/><span><strong>{item.title}</strong><small>{item.description}</small></span></button>):<p>{!connected?'连接后台后读取资源。':group.id==='tasks'?'本工程暂无候选任务。':'此工程未关联这类资源。'}</p>}{group.id==='tasks'&&<button onClick={()=>{setTab('tasks');setMenu('');setInfoCollapsed(false);}}>查看任务与创建候选 →</button>}</div>}</div>)}<button className="pd-environment" onClick={()=>{setEnvironment(true);setMenu('');}}>开发环境</button></nav>
-    <main className="pd-main">
-      {statusError&&<div className="pd-alert" role="alert">{statusError}<button onClick={()=>switchProject('')}>重新读取工程清单</button></div>}
-      {!!otherSessions.length&&connected&&<div className="pd-ownership">其他运行实例：{otherSessions.map((s:any)=><button key={s.projectId} onClick={()=>switchProject(s.projectId)}>{s.projectName||s.projectId} · {s.runtimeState||phaseLabel[s.phase]||'状态待确认'} ↗</button>)}<span>切换查看不停止它们</span></div>}
-      {connected&&externalOwner&&!otherSessions.length&&<div className="pd-ownership">{runtimeOwnerLabel(externalOwner)}<span>{externalOwner.state==='unknown'?externalOwner.reason||'占用状态未确认，请检查本机服务。':'实例 '+String(externalOwner.sessionId||'身份待核对').slice(0,18)+' · 保持原归属'}</span></div>}
-      <div className="pd-topology-label"><Glyph kind="link" size={17}/><strong>工程拓扑</strong><span>{snapshot?entities.length+' 个实例':'等待读取'}</span><div className="pd-runtime-chip"><i className="pd-dot"/>运行实例 · <strong>{instanceLabel}</strong></div></div>
-      {snapshot?<Topology snapshot={snapshot} connected={connected} selected={selected} onSelect={selectResource} onOpen={openEntity} busy={busy}/>:<div className="pd-placeholder"><Glyph kind="runtime" size={38}/><strong>{statusError?'等待后台恢复连接':'正在读取工程拓扑'}</strong><p>只展示当前工程已关联的资源与实例。</p></div>}
-      <section className={'pd-info'+(infoCollapsed?' collapsed':'')}>
-        {!infoCollapsed&&<div className="pd-info-resizer" role="separator" aria-label="调整信息区高度" aria-orientation="horizontal" aria-valuemin={140} aria-valuemax={440} aria-valuenow={infoHeight} tabIndex={0} onPointerDown={e=>{resizeStart.current={y:e.clientY,height:infoHeight};e.currentTarget.setPointerCapture(e.pointerId);}} onPointerMove={e=>{if(resizeStart.current)setInfoHeight(Math.max(140,Math.min(440,resizeStart.current.height+resizeStart.current.y-e.clientY)));}} onPointerUp={e=>{resizeStart.current=null;e.currentTarget.releasePointerCapture(e.pointerId);}} onPointerCancel={()=>{resizeStart.current=null;}} onKeyDown={e=>{if(['ArrowUp','ArrowDown','Home','End'].includes(e.key)){e.preventDefault();setInfoHeight(height=>e.key==='Home'?140:e.key==='End'?440:Math.max(140,Math.min(440,height+(e.key==='ArrowUp'?20:-20))));}}}/>}
-        <div className="pd-tabs" role="tablist" aria-label="工程信息">{[{id:'status',label:'属性',icon:'runtime'},{id:'variables',label:'变量监视',icon:'link'},{id:'logs',label:'日志与诊断',icon:'tasks'},{id:'tasks',label:'候选任务',icon:'tasks'}].map(item=><button key={item.id} id={'pd-tab-'+item.id} role="tab" aria-controls="pd-info-content" aria-selected={tab===item.id&&!infoCollapsed} onClick={()=>{setTab(item.id);setInfoCollapsed(false);}}><Glyph kind={item.icon} size={15}/>{item.label}{item.id==='tasks'&&typeof taskCount==='number'&&<span className="pd-count">{taskCount}</span>}</button>)}<span className="pd-tab-spacer"/><button aria-label={infoCollapsed?'展开信息区':'收起信息区'} onClick={()=>setInfoCollapsed(!infoCollapsed)}>{infoCollapsed?'展开 ↑':'收起 ↓'}</button></div>
-        {!infoCollapsed&&<div className="pd-info-content" id="pd-info-content" role="tabpanel" aria-labelledby={'pd-tab-'+tab} style={{height:infoHeight}}>
-          {message&&<p className="pd-message" role="status">{message}</p>}
-          {tab==='tasks'?<div className="pd-task-layout"><form className="pd-task-form" onSubmit={createTask}><div className="pd-form-title"><strong>创建候选</strong><span className="pd-tag">M1 · 规则改名</span></div><p>将 PLC 变量 <code>Count</code> 改为 <code>BatchCount</code>，生成独立候选副本。</p><div className="pd-capability">模型生成：{tasks?.capabilities?.modelGeneration===true?'后台声明可用':'未接入'} · 不自动应用</div><label className="pd-field-label" htmlFor="plcdev-task-request">本工程修改要求</label><textarea id="plcdev-task-request" value={waiting?.request||request} onChange={e=>setRequest(e.target.value)} maxLength={4000} disabled={!!waiting||taskBusy||!readyTasks} placeholder="把 Count 改名为 BatchCount，生成候选供我审阅" rows={3}/><label className="pd-consent"><input type="checkbox" checked={waiting?waiting.sourceBasis==='saved_revision':consent} disabled={!!waiting||taskBusy||!readyTasks} onChange={e=>setConsent(e.target.checked)}/><span>使用当前已保存版本；不包含编辑器未保存的修改。</span></label><span className="pd-revision">{tasks?.projectRevision?'保存版本 '+tasks.projectRevision.slice(0,12):'保存版本尚未确认'}</span><button className="pd-primary" type="submit" disabled={!readyTasks||taskBusy||(!waiting&&(!tasks?.capabilities?.savedRevisionCandidate||!consent||!request.trim()))}>{taskBusy?'正在提交…':waiting?'使用原请求重试':'生成独立候选'}</button>{waiting&&<p className="pd-note warning">有一条结果未确认的请求，重试沿用原保存版本和请求编号。</p>}{taskError&&<p className="pd-note warning">{taskError}</p>}{tasks&&!tasks.capabilities?.savedRevisionCandidate&&<p className="pd-note">此工程暂不支持本批改名候选，可查看已有任务。</p>}</form><div className="pd-task-list"><div className="pd-form-title"><strong>本工程任务</strong><span>服务端持久保存</span></div>{!tasks?<p className="pd-empty-small">{taskError?'任务状态暂时无法确认。':'正在读取任务…'}</p>:!tasks.tasks.length?<p className="pd-empty-small">暂无候选任务。</p>:tasks.tasks.map((task:any)=><article key={task.taskId} className={'pd-task'+(selectedTask?.taskId===task.taskId?' selected':'')}><div className="pd-task-head"><strong>{taskStatus(task.status)}</strong><code>{String(task.taskId).slice(0,18)}…</code></div><p>{task.request}</p>{task.candidate?.summary&&<div className="pd-change"><code>{task.candidate.summary.before}</code><span>→</span><code>{task.candidate.summary.after}</code></div>}<small>{task.sourceBasis==='saved_revision'||task.candidate?.sourceBasis==='saved_revision'?'已保存版本 · ':''}{task.reason||task.message||task.completionScope||'候选任务'}{task.candidate?.candidateDigest&&' · 摘要 '+task.candidate.candidateDigest.slice(0,12)}</small><div className="pd-task-actions"><button disabled={!readyTasks} onClick={()=>reviewTask(task)}>查看任务详情</button>{candidateIdentity(task,projectId)&&<button disabled={!readyTasks||busy} onClick={()=>openCandidate(task)}>在 OpenPLC 打开候选 <Glyph kind="open" size={13}/></button>}</div></article>)}</div></div>:tab==='variables'?<><div className="pd-form-title"><strong>当前工程变量</strong><span>只读 · 数据失效时隐藏旧值</span></div>{variables.length?<table className="pd-variables"><thead><tr><th>实例路径</th><th>类型</th><th>值</th><th>数据质量</th></tr></thead><tbody>{variables.map((v:any)=><tr key={v.path}><td>{v.path}</td><td>{v.type}</td><td>{v.value}</td><td>{v.quality}</td></tr>)}</tbody></table>:<p className="pd-empty-small">当前后台尚未提供本工程的变量采样。运行实例和数据来源确认后显示。</p>}</>:tab==='logs'?<><div className="pd-form-title"><strong>当前工程诊断</strong><span>{connected?'来自本机后台':'后台未连接'}</span></div>{snapshot?.message&&<p>{snapshot.message}</p>}{statusError&&<p className="pd-note warning">{statusError}</p>}{taskError&&<p className="pd-note warning">{taskError}</p>}{snapshot?.failure&&<p className="pd-note warning">{displayValue(snapshot.failure)}</p>}<ul className="pd-events">{(snapshot?.events||[]).slice(-20).reverse().map((event:any,i:number)=><li key={i}><time>{typeof event.at==='number'?new Date(event.at*1000).toLocaleTimeString():'—'}</time><span>{event.message||displayValue(event)}</span></li>)}</ul>{!snapshot?.events?.length&&<p className="pd-empty-small">暂无后台事件。</p>}</>:<div className="pd-detail-grid"><div><span className="pd-eyebrow">{selectedLink?'所选链路':'所选实例'}</span><h2>{selectedLink?.title||detail?.title||'当前工程'}</h2><dl><dt>{selectedLink?'连接双方':'关联文件／目标'}</dt><dd className="pd-path">{selectedLink?selectedLink.nodes.map((id:string)=>entities.find((n:any)=>n.id===id)?.title||id).join(' ↔ '):displayValue(detail?.path||current?.manifestPath||'未读取')}</dd><dt>所属工程</dt><dd>{current?.name||'未读取'}</dd><dt>工程身份</dt><dd className="pd-path">{projectId||'未读取'}</dd>{selectedLink?<><dt>状态</dt><dd>{overviewConnection(snapshot,selectedLink.key,connected).label}</dd><dt>协议</dt><dd>{selectedLink.details?.protocol||(['load','generate'].includes(selectedLink.key)?'文件交付':'未声明')}</dd><dt>端点</dt><dd className="pd-path">{selectedLink.details?.endpoint||'未声明'}</dd></>:<><dt>入口状态</dt><dd>{connected?detail?.component?.label||'尚未核验':'状态未知'}</dd><dt>工具模式</dt><dd>{current?.defaultMode||current?.kind||'未读取'}</dd></>}</dl>{detail&&(detail.tool||detail.hmi)&&<button disabled={busy||!connected||(detail.tool?!canUseTool(snapshot,projectId,detail.tool,connected):!snapshot?.capabilities?.[snapshot?.hmiOpen&&!detail.fuxa?'canReconnectHmi':'canShowHmi'])} onClick={()=>openEntity(detail)}>打开 {detail.title}<Glyph kind="open" size={13}/></button>}</div><div><span className="pd-eyebrow">独立运行实例</span><h2>{instanceLabel}</h2><dl><dt>实例编号</dt><dd className="pd-path">{session?.id||'未创建'}</dd><dt>执行目标</dt><dd>{session?.target||current?.target||'未确认'}</dd><dt>装载产物</dt><dd className="pd-path">{session?.programHash||'尚无装载记录'}</dd></dl><p className="pd-note">工程查看、DSH 对话与运行实例分别管理。关闭此页或切换工程不会发送运行／停止命令。</p></div></div>}
-        </div>}
-      </section>
-    </main><footer className="pd-footer"><span>{current?.name||projectId||'PLCdev'}{current?.manifestPath?' · '+short(current.manifestPath):''}</span><span>当前工程资源 · 独立任务与运行实例</span></footer>
-    {environment&&<div className="pd-environment-backdrop" onClick={e=>{if(e.target===e.currentTarget)setEnvironment(false);}}><section className="pd-environment-dialog" role="dialog" aria-modal="true" aria-labelledby="pd-environment-title"><header><div><h2 id="pd-environment-title">开发环境</h2><p>{current?.name||'当前工程'} · 本机依赖检查</p></div><button autoFocus aria-label="关闭开发环境" onClick={()=>setEnvironment(false)}>×</button></header>{snapshot?.dependencies?.length?<ul>{snapshot.dependencies.map((dependency:any)=><li key={dependency.id}><span>{dependency.label||dependency.id}</span><strong>{dependency.available===true?'可用':dependency.available===false?'缺失':'未确认'}</strong><small>{dependency.path}</small></li>)}</ul>:<p>后台尚未提供依赖检查结果。</p>}<p className="pd-note">安装可用、窗口已打开、工程已关联和运行通信是不同状态。</p></section></div>}
+  async function createEditorSession(){
+    if(creating.current||!onCreateSession||!editorPicker)return;
+    const p=editorPicker.projectId;creating.current=true;setBusy(true);rememberSessionOrigin();
+    try{const result=await onCreateSession(p);if(!result?.ok||!result.sessionId)throw new Error(result?.message||'新会话尚未确认，未打开编辑器。');await openLinkedEditor(result.sessionId,p);}
+    catch(error:any){if(alive.current&&activeRef.current.projectId===p)setMessage(error?.message||'新会话连接未能确认。');}
+    finally{creating.current=false;if(alive.current&&activeRef.current.projectId===p)setBusy(false);}
+  }
+  async function openEntity(entity:any,standalone=false){
+    const context=activeRef.current,p=context.projectId,s=context.snapshot;if(busy||!context.connected||s?.project?.id!==p)return;
+    if(entity.tool&&!canUseTool(s,p,entity.tool,true))return;
+    if(entity.tool==='plc'&&!standalone&&(contexts||onCreateSession)){
+      const sid=returnSession||contexts?.activeSession?.();
+      const binding=sid?contexts?.get?.(sid)?.snapshot?.()?.binding:null;
+      if(sid&&binding?.projectId===p)await openLinkedEditor(sid,p);
+      else setEditorPicker({projectId:p,entity});
+      return;
+    }
+    const body:any={projectId:p,sessionId:s.session?.id??s.sessionId??null,client:client.current,sequence:++sequence.current,expires:Date.now()/1000+12};
+    if(entity.tool){if(!canUseTool(s,p,entity.tool,true))return;body.action='tool';body.tool=entity.tool;}
+    else if(entity.hmi){const cap=s.hmiOpen&&!entity.fuxa?'canReconnectHmi':'canShowHmi';if(!s.capabilities?.[cap])return;body.action=entity.fuxa?'open-hmi':s.hmiOpen?'reopen-hmi':'show-hmi';}else return;
+    const ticket=gate.current.begin('action');setBusy(true);setMessage('正在打开 '+entity.title+'…');
+    try{const result=await api('action',body,30000);if(!result.ok)throw new Error('服务未确认入口打开结果。');if(alive.current&&gate.current.accepts(ticket))setMessage('已请求打开 '+entity.title+'，请在工具窗口中查看。');}
+    catch(error:any){if(alive.current&&gate.current.accepts(ticket))setMessage(definitiveFailure(error)?'未能打开：'+error.message:'打开结果尚未确认，请检查工具窗口。'+error.message);}
+    finally{if(alive.current&&gate.current.accepts(ticket))setBusy(false);}
+  }
+  // Compatibility recovery only: never manufacture a new legacy request.
+  async function resumeLegacyRequest(){
+    const {projectId:p,snapshot:s,connected:online}=activeRef.current,body=pending.current.get(p);
+    if(!online||s?.project?.id!==p||tasks?.projectId!==p||!tasks.projectRevision||!body||pendingBusy.current.has(p))return;
+    const ticket=gate.current.begin('legacy-recovery');pendingBusy.current.add(p);setPendingVersion(n=>n+1);setMessage('正在按原编号恢复旧请求…');
+    try{
+      const result=await api('tasks',body,65000);
+      if(result.task?.projectId!==p||!result.task?.taskId)throw new Error('服务未确认同一工程的任务身份。');
+      const remaining=new Map(pending.current);remaining.delete(p);persistPending(storage(),remaining);pending.current=remaining;
+      if(alive.current&&gate.current.accepts(ticket)){setMessage('旧请求结果已确认，可在兼容记录中查看。');setRefresh(n=>n+1);}
+    }catch(error:any){if(alive.current&&gate.current.accepts(ticket))setMessage('旧请求尚未核对完成，原编号与内容已保留。'+error.message);}
+    finally{pendingBusy.current.delete(p);if(alive.current)setPendingVersion(n=>n+1);}
+  }
+  useEffect(()=>{if(!selected&&!review)return;const frame=requestAnimationFrame(()=>{const aside=rootElement.current?.querySelector<HTMLElement>('.pd-workspace-aside'),content=scrollElement.current;if(!aside)return;aside.scrollTop=0;aside.querySelector<HTMLElement>('button')?.focus({preventScroll:true});if(compact&&content&&detailOrigin.current){const header=aside.querySelector<HTMLElement>('header,.pc-review-toolbar')||aside;content.scrollTop+=header.getBoundingClientRect().top-content.getBoundingClientRect().top-12;}});return()=>cancelAnimationFrame(frame);},[selected,review,compact]);
+  const current=snapshot?.project||projects.find(p=>p.id===projectId),entities=graphEntities(snapshot),groups=overviewResources(snapshot,tasks),links=overviewLinks(snapshot);
+  const detail=entities.find(n=>n.id===selected),selectedLink=links.find(l=>l.id===selected);
+  const delivery=['designer','hmi'].includes(selected||'')?links.find(link=>link.key==='generate'):null;
+  const deliverySource=entities.find(n=>n.id===delivery?.source),deliveryTarget=entities.find(n=>n.id===delivery?.target);
+  const sharedDeliveryFile=deliverySource?.path&&deliveryTarget?.path&&String(deliverySource.path).replaceAll('\\','/').toLowerCase()===String(deliveryTarget.path).replaceAll('\\','/').toLowerCase();
+  const readyTasks=connected&&tasks?.projectId===projectId,waiting=pending.current.get(projectId),taskBusy=pendingBusy.current.has(projectId);
+  const legacyTasks=tasks?.projectId===projectId?tasks.tasks.filter((t:any)=>!t.workflow||t.workflow==='count-rename-v1'):[];
+  const otherSessions=snapshot?.otherSessions||[],externalOwner=externalRuntimeOwner(snapshot);
+  const signalId=selected?.startsWith('signal:')?selected.slice(7):null;
+  const awaiting=readyTasks?tasks.tasks.filter((task:any)=>task.status==='awaiting_review'&&task.workflow&&task.workflow!=='count-rename-v1'):[];
+  const backendDisconnected=isBackendDisconnected({code:statusCode});
+  const serviceError=statusError&&<div className="pd-alert" role="alert">{backendDisconnected?<div><strong>工程服务未连接</strong><p style={{margin:'6px 0'}}>暂时无法读取工程与生成候选。</p><BackendConnection onConnected={()=>setRefresh(n=>n+1)}/></div>:<><span>{statusError}</span><button onClick={()=>setRefresh(n=>n+1)}>重新读取</button></>}</div>;
+  function requestConversation(){changeView('sessions');}
+  const resourceDetail=selected&&(detail||selectedLink)&&<section className="pd-resource-detail" aria-label="资源详情">
+    <header><h2><BrandTitle>{selectedLink?.title||detail?.title}</BrandTitle></h2><button aria-label="关闭资源详情" onClick={closeDetail}>×</button></header>
+    <dl><dt>{selectedLink?'连接双方':'文件位置'}</dt><dd>{selectedLink?selectedLink.nodes.map((id:string)=>entities.find(n=>n.id===id)?.title||id).join(' ↔ '):displayValue(detail?.path)}</dd>
+    {selectedLink&&<><dt>协议</dt><dd>{selectedLink.details?.protocol||(['load','generate'].includes(selectedLink.key)?'文件交付':'未声明')}</dd><dt>端点</dt><dd>{selectedLink.details?.endpoint||'未声明'}</dd></>}</dl>
+    {delivery&&<div className="pd-resource-delivery"><h3>画面交付</h3>{sharedDeliveryFile?<p>编辑器与运行画面使用同一文件。</p>:<dl><dt>{selected==='designer'?'运行画面':'编辑工程'}</dt><dd>{displayValue(selected==='designer'?deliveryTarget?.path:deliverySource?.path)}</dd></dl>}<dl><dt>交付方式</dt><dd>{delivery.details?.protocol||'文件交付'}</dd>{delivery.details?.endpoint&&<><dt>端点</dt><dd>{displayValue(delivery.details.endpoint)}</dd></>}</dl></div>}
+  </section>;
+  const toolDialog=environment&&<ToolDownloads onClose={()=>setEnvironment(false)} onChecked={()=>setRefresh(n=>n+1)}/>;
+  if(picker&&contexts)return <><ConversationProjectPicker contexts={contexts} sessionId={picker.sessionId} onReturn={closePicker} snapshot={snapshot} connected={connected} onToolDownloads={()=>setEnvironment(true)}/>{toolDialog}</>;
+  if(catalog)return <section className="pd-root pd-catalog plcdev-scope plcdev-rail"><style>{styles+workspaceStyles}</style><RuntimeActivity activity={runtimeActivity} onOpenRuntime={onOpenRuntime} currentProjectId={projectId} currentView="catalog"/><header className="pd-page-toolbar"><h1><BrandTitle>打开工程</BrandTitle></h1><div>{catalogOrigin.current&&<button onClick={cancelCatalog}>取消，返回工程</button>}{projects.length>0&&<button onClick={()=>setEnvironment(true)}>工具下载与安装</button>}<button onClick={()=>setRefresh(n=>n+1)}>刷新清单</button></div></header><p className="pd-catalog-purpose">只切换查看位置，现有会话的关联工程保持。</p>{serviceError}{!projects.length&&<ToolDownloadEntry onOpen={()=>setEnvironment(true)}/>}<ProjectList projects={projects} currentId={projectId} action="打开工程" onChoose={(id:string)=>switchProject(id)}/><ProjectOperations mode="catalog" snapshot={snapshot} connected={connected} onChanged={(result:any)=>{setCreatedProject(result.projectId);switchProject(result.projectId,'resources');setRefresh(n=>n+1);}}/>{toolDialog}</section>;
+  return <section ref={rootElement} className={'pd-root pd-workspace plcdev-scope plcdev-rail'+(compact?' pd-compact':'')} data-pending-version={pendingVersion}><style>{styles+workspaceStyles}</style>
+    <RuntimeActivity activity={runtimeActivity} onOpenRuntime={onOpenRuntime} currentProjectId={projectId} currentView={view} excludeProjectId={view==='resources'?projectId:undefined}/>
+    {(back.length>0||returnSession)&&<div className="pd-workspace-return">{back.length>0&&<button onClick={goBack}>← 返回{projects.find(p=>p.id===back.at(-1).projectId)?.name||'上一工程'}</button>}{returnSession&&onReturnToSession&&<button onClick={()=>{saveLocation();onReturnToSession(returnSession);}}>返回来源会话</button>}</div>}
+    <header className="pd-header">
+      <div className="pd-project-heading"><button className="pd-project-switch" title="切换查看工程" aria-label="切换查看工程" onClick={openCatalog}><BrandTitle>{current?.name||'正在读取工程…'}</BrandTitle><svg className="pd-project-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button><span className="pd-version">{readyTasks?'保存版本 '+tasks.projectRevision.slice(0,8):'版本待确认'}</span></div>
+      <div className="pd-header-right"><span className={'pd-connection '+(connected?'good':'')}><i className={'pd-dot '+(connected?'good':'')}/>{connected?'状态已读取':backendDisconnected?'工程服务未连接':statusError?'状态读取失败':'正在连接'}</span><button className="pd-quiet" onClick={()=>setRefresh(n=>n+1)} aria-label="刷新工程状态">刷新</button>{onCreateSession?<button disabled={!projectId} onClick={createSession}>新建工程会话</button>:<button disabled={!projectId} onClick={requestConversation}>选择关联会话</button>}</div>
+    </header>
+    {editorPicker?.projectId===projectId&&<EditorSessionPicker projectId={projectId} hostSessions={hostSessions} busy={busy} onChoose={(sid:string)=>openLinkedEditor(sid)} onCreate={onCreateSession?createEditorSession:undefined} onStandalone={()=>{const entity=editorPicker.entity;setEditorPicker(null);void openEntity(entity,true);}} onClose={()=>setEditorPicker(null)}/>}
+    <nav className="pd-workspace-nav" aria-label="工程导航">
+      <div className="pd-nav-primary" role="group" aria-label="主要工作区">{[['resources','工程资源'],['runtime','运行与监视']].map(([id,label])=><button className="plcdev-tab" key={id} aria-current={view===id?'page':undefined} onClick={()=>changeView(id)}><Glyph kind={id==='resources'?'project':'runtime'} size={16}/>{label}</button>)}</div>
+      <div className="pd-nav-secondary" role="group" aria-label="工程管理">{[['sessions','关联会话'],['settings','工程设置']].map(([id,label])=><button className="plcdev-tab" key={id} aria-current={view===id?'page':undefined} onClick={()=>changeView(id)}><Glyph kind={id==='sessions'?'tasks':'settings'} size={16}/>{label}</button>)}</div>
+    </nav>
+    <div ref={scrollElement} onWheel={cancelPendingRestore} onTouchStart={cancelPendingRestore} onKeyDown={event=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End'].includes(event.key))cancelPendingRestore();}} onScroll={event=>{if(event.target===scrollElement.current)lastScroll.current=event.currentTarget.scrollTop;}} className="pd-workspace-content">
+      {serviceError}
+      {message&&<p className="pd-message" role="status">{message}</p>}
+      {!!snapshot?.previousToolWindows?.length&&<p className="pd-message" role="status">旧版本工具窗口仍打开，请从工程资源打开当前版本。旧窗口中的未保存编辑仍保留。</p>}
+      {snapshot?.savedVersionSync?.state==='blocked'&&<p className="pd-message" role="status">{snapshot.savedVersionSync.message}</p>}
+      {waiting&&view!=='settings'&&<div className="pd-alert" role="status"><span>有一条旧版请求结果待核对。</span><button onClick={()=>changeView('settings')}>查看恢复记录</button></div>}
+      <div className={'pd-workspace-split'+((resourceDetail||review||signalId)?' has-detail':'')}><div>
+      {view==='runtime'?projectContexts?<RuntimePane key={projectId} projectId={projectId} projectRevision={readyTasks?tasks.projectRevision:null} projectContexts={projectContexts} onProject={(_sid:any,id:string)=>switchProject(id,'runtime')} sessionId={null}/>:<p>运行状态服务未就绪。</p>:view==='sessions'?<ProjectSessions projectId={projectId} tasks={tasks} hostSessions={hostSessions} openSession={navigateSession} onReview={showReview} onCreateSession={onCreateSession?createSession:undefined}/>:view==='settings'?<>
+        <ProjectOperations mode="configuration" snapshot={snapshot} connected={connected} initialSection={configurationSection} onChanged={()=>setRefresh(n=>n+1)}/>
+        <section className="pd-settings-details"><h2 style={{fontSize:15,margin:'0 0 12px'}}>工具环境</h2><button onClick={()=>setEnvironment(true)}>工具下载与安装</button></section>
+        <details className="pd-settings-details"><summary>开发环境与诊断</summary>{snapshot?.dependencies?.length>0&&<details><summary>工程依赖检测</summary><dl>{snapshot.dependencies.map((dependency:any)=><React.Fragment key={dependency.id}><dt>{dependency.label||dependency.id}</dt><dd>{dependency.available===true?'入口已找到':dependency.available===false?'未找到':'未检测'}<br/><code>{dependency.path}</code></dd></React.Fragment>)}</dl></details>}<dl><dt>工程位置</dt><dd>{current?.manifestPath||'未提供'}</dd><dt>工程标识</dt><dd>{projectId}</dd></dl>{taskError&&<p role="status">{taskError}</p>}<p>运行报错与历史事件统一在“运行与监视 → 运行事件”查看。</p></details>
+        {(waiting||legacyTasks.length>0)&&<details className="pd-settings-details" open={!!waiting}><summary>旧版请求与兼容记录</summary>
+          {waiting&&<div className="pd-legacy-recovery" role="status"><strong>旧版请求结果待核对</strong><p>{waiting.request}</p><details><summary>原请求信息</summary><dl><dt>请求编号</dt><dd>{waiting.clientRequestId}</dd><dt>源保存版本</dt><dd>{waiting.expectedRevision}</dd></dl></details><p>仅沿用已保存的请求编号和内容恢复，不创建新的修改要求。</p><button disabled={!readyTasks||taskBusy} onClick={resumeLegacyRequest}>{taskBusy?'正在核对…':'按原编号恢复请求'}</button></div>}
+          {legacyTasks.length>0&&<><p>旧版规则修改记录仅供核对。新的修改请进入工程对话。</p>{legacyTasks.map((task:any)=><details key={task.taskId}><summary>{task.request||'需求未提供'} · {taskStatus(task.status)}</summary><p>{task.reason||task.message||'结果说明未提供'}</p><p>任务编号：<code>{task.taskId}</code></p></details>)}</>}
+        </details>}
+      </>:<>
+        {createdProject===projectId&&connected&&<div className="pd-work-summary" role="status"><div><strong>工程已就绪</strong><p>进入关联会话描述需求，AI 会读取工程、生成修改候选；审阅后保留到当前工程并编译验证。</p></div>{onCreateSession?<button onClick={createSession}>描述需求，开始 AI 修改</button>:<button onClick={requestConversation}>选择关联会话</button>}<button className="pd-quiet" onClick={()=>setCreatedProject(null)} aria-label="关闭工程就绪提示">×</button></div>}
+        {!!awaiting.length&&<div className="pd-work-summary"><div><strong>{awaiting.length} 项修改待审阅</strong><p>按来源会话查看方案，审阅后保留本轮修改。</p></div><button onClick={()=>changeView('sessions')}>查看关联会话</button></div>}
+        {hasFuxa&&fuxaRecovery?.projectId===projectId&&fuxaRecovery.state!=='none'&&<div className="pd-recovery-notice" role="status"><strong>{fuxaRecovery.reasonCode==='native_write_unknown'?'FUXA 原生保存结果待核对':fuxaRecovery.state==='pending'?'发现原 FUXA 待处理预览':fuxaRecovery.state==='conflict'?'原 FUXA 预览存在冲突':'原 FUXA 预览状态未确认'}</strong><p>{recoveryReason[fuxaRecovery.reasonCode]}</p><button disabled={busy||!canUseTool(snapshot,projectId,'fuxa',connected)} onClick={()=>openEntity({tool:'fuxa',title:'FUXA'})}>打开 FUXA 检查</button>{!canUseTool(snapshot,projectId,'fuxa',connected)&&<small> 后台尚未确认 FUXA 编辑器入口可用。</small>}</div>}
+        <RuntimeSummary snapshot={connected?snapshot:null}/>
+        {!!otherSessions.length&&connected&&<div className="pd-ownership">其他运行实例：{otherSessions.map((s:any)=><button key={s.projectId} onClick={()=>switchProject(s.projectId,'runtime')}>{s.projectName||'工程名称未提供'} · 上次状态：{({RUNNING:'PLC 运行中',STOPPED:'PLC 已停止'} as any)[s.runtimeState]||phaseLabel[s.phase]||'待核对'} ↗</button>)}</div>}
+        {connected&&externalOwner&&!otherSessions.length&&<p className="pd-ownership">{runtimeOwnerLabel(externalOwner)}<button onClick={()=>changeView('runtime')}>查看运行状态</button></p>}
+        {connected&&snapshot?.dependencies?.some((item:any)=>['editor','fuxa','oip'].includes(item.id)&&item.available===false)&&<div className="pd-message" role="status"><span>未找到 {snapshot.dependencies.filter((item:any)=>['editor','fuxa','oip'].includes(item.id)&&item.available===false).map((item:any)=>item.label).join('、')}。</span> <button onClick={()=>setEnvironment(true)}>工具下载与安装</button></div>}
+        <div className="pd-resource-list" aria-label="工程资源列表">{!snapshot?<p>工程资源尚未读取。</p>:groups.filter((group:any)=>group.id!=='bindings').map((group:any)=><section className="pd-resource-section" key={group.id}><h2><span className="pd-resource-icon"><Glyph kind={group.id==='hmi'&&hasFuxa?'fuxa':group.id==='scene'&&entities.some(n=>n.tool==='oip')?'oip':group.icon} size={22}/></span>{group.label}</h2><div className="pd-resource-items">{group.items.length?group.items.map((item:any)=>{
+          const entity=entities.find(n=>n.id===item.id),allowed=entity?.tool&&canUseTool(snapshot,projectId,entity.tool,connected);
+          const hmi=group.id==='hmi'?entities.find(n=>item.nodes.includes(n.id)&&n.hmi):null,hmiCap=snapshot?.hmiOpen&&!hmi?.fuxa?'canReconnectHmi':'canShowHmi',hmiAllowed=connected&&snapshot?.capabilities?.[hmiCap]===true;
+          return <div className="pd-resource-row" key={item.id}><div className="pd-resource-name"><strong>{item.title}</strong><span>{item.description}</span></div><div className="pd-resource-actions"><button className="pd-quiet plcdev-link plcdev-tab" data-resource={item.id} onClick={()=>showResource(item.id)} aria-expanded={selected===item.id}>详情</button>{entity?.tool&&<button disabled={busy||!allowed} title={allowed?undefined:snapshot?.capabilities?.reasons?.[entity.tool]||'后台尚未确认此入口可用'} onClick={()=>openEntity(entity)}>打开 {entity.title}</button>}{hmi&&<button disabled={busy||!hmiAllowed} title={hmiAllowed?undefined:snapshot?.capabilities?.reasons?.[hmiCap]||'后台尚未确认运行画面可用'} onClick={()=>openEntity(hmi)}>打开运行画面</button>}</div>{hmi&&!hmiAllowed&&<small className="pd-resource-reason">{snapshot?.capabilities?.reasons?.[hmiCap]||'后台尚未确认运行画面可用。'}</small>}{entity?.tool&&!allowed&&<small className="pd-resource-reason">后台尚未确认此入口可用。</small>}</div>;
+        }):<p className="pd-empty-resource">未配置{group.id==='scene'&&Object.hasOwn(snapshot?.capabilities||{},'canConfigureOip')&&<button className="pd-quiet" onClick={()=>{setConfigurationSection('oip');changeView('settings');}}>关联 OIP 场景</button>}</p>}</div></section>)}</div>
+        {connected&&<><ProjectSignalList inspection={inspection} selected={selected} onSelect={showResource} connections={links.filter(link=>['variables','io'].includes(link.key))}/><ProjectReadback inspection={inspection}/></>}
+      </>}
+      </div>{(resourceDetail||review||signalId)&&<aside className="pd-workspace-aside plcdev-scope plcdev-rail" aria-label="工程详情侧栏" style={{'--pd-detail-height':detailHeight+'px'} as React.CSSProperties}>{review?<ConversationReview key={review.sessionId+':'+review.taskId} contexts={contexts} sessionId={review.sessionId} target={review} embedded onClose={closeDetail} onRetainedProject={(id:string)=>switchProject(id,'resources')} onSourceSession={(target:any)=>navigateSession(target)} onContinueRetained={onContinueRetained} onOpenEditorSession={onOpenEditorSession} onOpenResultResource={onOpenResultResource}/>:signalId?<ProjectSignalDetail key={projectId+':'+signalId} inspection={inspection} signalId={signalId} projectName={current?.name} onClose={closeDetail} onCarryReference={onCarryReference?carryReference:undefined}/>:resourceDetail}</aside>}</div>
+    </div>
+    {toolDialog}
   </section>;
 }

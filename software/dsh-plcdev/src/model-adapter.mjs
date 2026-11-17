@@ -3,7 +3,7 @@ import { TOOL_NAMES } from './native-tools.mjs';
 export const MODEL_PROVIDER = 'plcdev-deepseek';
 export const MODEL_ID = 'project-agent';
 const allowed = new Set(TOOL_NAMES);
-const info = () => ({ provider: MODEL_PROVIDER, id: MODEL_ID, name: 'DeepSeek · PLCdev 工程助手', inputModalities: ['text'], description: '使用 PLCdev 后台已有配置；仅限当前工程候选工具。' });
+const info = () => ({ provider: MODEL_PROVIDER, id: MODEL_ID, name: 'DeepSeek · 旧版兼容', inputModalities: ['text'], description: '用于旧会话或尚无已验证宿主模型时的兼容；建议改用宿主模型。' });
 const text = message => (message.content ?? []).filter(b => b.type === 'text').map(b => b.text).join('\n');
 
 /** Only this user turn and this plugin's calls/results, never host system/context or other tools. */
@@ -32,14 +32,16 @@ export function projectModelRequest(options) {
 }
 
 /** Server-only adapter: no key is copied into DSH configuration, browser state or responses. */
-export function createProjectModelAdapter({ bridge, conversations, projectContext }) {
+export function createProjectModelAdapter({ bridge, conversations, projectContext, showLegacy = async()=>true }) {
   const checkRoute = (provider, model) => { if (provider !== MODEL_PROVIDER || model !== MODEL_ID) throw new Error('未知的 PLCdev 模型。'); };
   const adapter = {
-    providerInfo: provider => ({ id: provider, name: 'PLCdev · DeepSeek' }),
+    providerInfo: provider => ({ id: provider, name: 'DeepSeek · 旧版兼容' }),
     providerRetryPolicy: () => ({ mode: 'normal', maxRetries: 0, retryableCodes: [], initialDelayMs: 500, maxDelayMs: 1000, jitterRatio: 0 }),
     imageRequestPricing: () => undefined,
     imageRequestTarget: () => { throw new Error('PLCdev 工程模型不发送图片。'); },
-    async listModels(provider) { return provider === MODEL_PROVIDER ? [info()] : []; },
+    // Retire the old catalog entry only when a verified host route exists and
+    // no live session still needs its selected model. Exact routing is retained.
+    async listModels(provider) { return provider===MODEL_PROVIDER && await showLegacy() ? [info()] : []; },
     async resolveModel(provider, model, signal) { checkRoute(provider, model); signal?.throwIfAborted(); return info(); },
     async prepareCall(provider, model, signal) { return { model: await adapter.resolveModel(provider, model, signal), stream: options => adapter.stream(options) }; },
     async *stream(options) {

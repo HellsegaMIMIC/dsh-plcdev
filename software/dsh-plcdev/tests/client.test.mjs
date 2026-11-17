@@ -13,6 +13,12 @@ test('status and task identity mismatches are rejected rather than displayed as 
   assert.throws(() => validateTasks({ projectId: 'A', projectRevision: 'hash', tasks: [{ projectId: 'B' }] }, 'A'));
   assert.throws(() => validateTasks({ projectId: 'A', projectRevision: '', tasks: [] }, 'A'));
 });
+test('empty catalog identity is usable only as a catalog and cannot replace a selected project',()=>{
+ const snapshot={catalogOnly:true,project:{id:'catalog',kind:'catalog'},projects:[],session:{id:null,projectId:'catalog'}};
+ assert.equal(validateSnapshot(snapshot,''),snapshot);assert.equal(validateSnapshot(snapshot,'catalog'),snapshot);
+ for(const invalid of [{...snapshot,projects:[{id:'other'}]},{...snapshot,session:{id:'running',projectId:'catalog'}},{...snapshot,project:{id:'catalog',kind:'user'}}])assert.throws(()=>validateSnapshot(invalid,''));
+ assert.throws(()=>validateSnapshot(snapshot,'user-old'));assert.throws(()=>validateSnapshot({...snapshot,catalogOnly:false},''));
+});
 test('saved-version consent required; persisted uncertain retry preserves every original field', () => {
   const args = { projectId: 'A', request: 'Count 改名 BatchCount', revision: 'old-revision', clientRequestId: 'same-id', consent: false };
   assert.throws(() => makeCandidateRequest(args));

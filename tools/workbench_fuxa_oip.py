@@ -4,7 +4,7 @@ Selection is read-only. Every mutation is bound to a project, configuration and
 session; the existing standalone demonstration profiles are never reused.
 """
 from __future__ import annotations
-import argparse,hashlib,json,os,secrets,socket,subprocess,sys,threading,time,webbrowser
+import argparse,hashlib,json,os,re,secrets,socket,subprocess,sys,threading,time,webbrowser
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.request import Request,urlopen
@@ -16,6 +16,22 @@ from workbench_start_stop import LocalProjectManager,source_hashes,read,env,EDIT
 from launch_fuxa_oip import identity,same_process,OwnedJob,OIP_EXE,open_port
 from fuxa_oip_session import prepare as prepare_session
 from oip_batch_mcp import call as oip_call,require_open_project,project_path
+
+
+def fuxa_start_failure(log_path, offset):
+    """Translate only recognized lock errors from this launch's log region."""
+    messages={
+        b'Error: [PLCDEV_FUXA_PROFILE_LOCKED]':'FUXA profile 已被其他实例使用，或互斥锁不可用；请核对原实例后再打开。',
+        b'Error: [PLCDEV_FUXA_PROFILE_UNSUPPORTED]':'当前 Node 不支持 FUXA profile 互斥锁；请使用已验证的 Node 版本。',
+        b'Error: [PLCDEV_FUXA_PROFILE_INVALID]':'FUXA profile 锁目录或文件无效；请保留现场核对。',
+    }
+    try:
+        with Path(log_path).open('rb') as stream:
+            stream.seek(offset);data=stream.read(65536)
+        for marker,message in messages.items():
+            if marker in data:return message
+    except (OSError,ValueError,TypeError):pass
+    return '本工程 FUXA 未启动，请查看日志'
 
 HOME=ROOT/'outputs/workbench/integrations'
 FUXA_PACKAGE=tool_path('fuxaPackage')
@@ -34,10 +50,19 @@ def fingerprint(project):
     return hashlib.sha256(json.dumps(content,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode('utf-8')).hexdigest()
 
 
+def profile_key(project):
+    """Separate published native versions without changing engineering UUID."""
+    project_id=project.get('id','')
+    if not re.fullmatch(r'user-[0-9a-f]{32}',project_id):raise ValueError('工程 UUID 无效')
+    application=(project.get('application') or {}).get('path','').replace('\\','/')
+    version=re.match(r'^\.plcdev/versions/(v[0-9]{6}-[0-9a-f]{12})/content/',application)
+    return project_id+('-'+version.group(1) if version else '')
+
+
 def local_paths(project):
     import re
     if not re.fullmatch(r'user-[0-9a-f]{32}',project.get('id','')):raise ValueError('工程 UUID 无效')
-    home=HOME/project['id']
+    home=HOME/profile_key(project)
     return {'home':home,'fuxa':home/'fuxa','oip':home/'oip','session':home/'current-session.json'}
 
 
@@ -73,7 +98,7 @@ def allocate(project):
         for entry in registry.values():
             if not isinstance(entry,dict) or set(entry)!={'fuxa','mcp','modbus'} or any(type(value) is not int or not 1024<=value<=65535 or value in claimed for value in entry.values()) or len(set(entry.values()))!=3:raise ValueError('本机工程端口索引冲突或损坏，未复用任何端口')
             claimed.update(entry.values())
-        ports=registry.get(project['id'])
+        key=profile_key(project);ports=registry.get(key)
         if relocating and ports and any(open_port(value) for value in ports.values()):
             raise ValueError('原工程工具端口仍占用，未迁移归属')
         if ports is None:
@@ -82,7 +107,7 @@ def allocate(project):
                 proposed={'fuxa':base,'mcp':base+1,'modbus':base+2}
                 if not reserved.intersection(proposed.values()) and not any(open_port(value) for value in proposed.values()):ports=proposed;break
             else:raise RuntimeError('没有可分配的本机工程端口')
-            registry[project['id']]=ports;store(registry_path,registry)
+            registry[key]=ports;store(registry_path,registry)
         if set(ports)!={'fuxa','mcp','modbus'} or len(set(ports.values()))!=3 or any(type(v) is not int or not 1024<=v<=65535 for v in ports.values()):raise ValueError('本机工程端口配置无效')
         store(identity_path,expected)
     return paths,ports
@@ -95,8 +120,10 @@ def device_mapping(bindings,ports,scene=None):
 
 
 def fuxa_environment(project,config_hash,paths,ports):
+    from workbench_preview_status import preview_environment
     return {'PLCDEV_FUXA_PROJECT_FILE':str(Path(project['hmi']).resolve()),'PLCDEV_FUXA_PROJECT_ID':project['id'],
-            'PLCDEV_FUXA_CONFIG_HASH':config_hash,'PLCDEV_FUXA_SESSION_FILE':str(paths['session'])}
+            'PLCDEV_FUXA_CONFIG_HASH':config_hash,'PLCDEV_FUXA_SESSION_FILE':str(paths['session']),
+            **preview_environment(project)}
 
 
 def listener_owned(port,child_identity):
@@ -108,6 +135,92 @@ def listener_owned(port,child_identity):
         return verified and same_process(child_identity)
     except (OSError,ValueError,RuntimeError):
         raise ValueError('暂时无法确认本工程工具的端口归属，请稍后重试') from None
+
+
+def fuxa_recovery_ready(manager,item,context):
+    """Verify an owned, read-only recovery endpoint without resolving it."""
+    recovery=context.get('recovery');reason=recovery.get('reasonCode') if isinstance(recovery,dict) else None
+    if not isinstance(recovery,dict) or recovery.get('state')!='blocked' or reason not in ('ai_resolution_unknown','native_write_unknown'):
+        raise ValueError('FUXA 事务状态尚不能安全查看，请保留原现场。')
+    def check_status(value):
+        if not isinstance(value.get('capability'),str) or not re.fullmatch(r'[a-f0-9]{48}',value['capability']):raise ValueError('FUXA 页面身份无法确认。')
+        request=Request('http://127.0.0.1:'+str(manager.ports['fuxa'])+'/plcdev/native-recovery/status',data=b'{}',headers={'Content-Type':'application/json','X-PLCdev-Hmi':value['capability']})
+        with urlopen(request,timeout=2) as response:
+            raw=response.read(4097)
+        if len(raw)>4096:raise ValueError('FUXA 恢复状态无效。')
+        result=json.loads(raw)
+        if (not isinstance(result,dict) or set(result)!={'ok','transactionId','scope','deviceSecurityIncluded'} or result['ok'] is not True
+                or result['scope']!='native-project-snapshot' or result['deviceSecurityIncluded'] is not False
+                or not isinstance(result['transactionId'],str) or not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}',result['transactionId'])):
+            raise ValueError('FUXA 恢复状态无效。')
+        if reason=='ai_resolution_unknown' and value.get('transactionId')!=result['transactionId']:raise ValueError('FUXA 事务身份已变化。')
+        return result
+    if manager.tools.get('fuxa') is not item or item['process'].poll() is not None or not manager.current_configuration():raise ValueError('工程工具或配置已变化。')
+    manager.verify_tool_listener('fuxa',fresh=True)
+    first=check_status(context)
+    latest=manager.fuxa_context()
+    latest_recovery=latest.get('recovery')
+    if (latest.get('capability')!=context.get('capability') or not isinstance(latest_recovery,dict) or latest_recovery.get('state')!='blocked'
+            or latest_recovery.get('reasonCode')!=reason or manager.tools.get('fuxa') is not item
+            or item['process'].poll() is not None or not manager.current_configuration()):raise ValueError('FUXA 状态已变化，请重新核对。')
+    if check_status(latest)!=first:raise ValueError('FUXA 事务身份已变化。')
+    manager.verify_tool_listener('fuxa',fresh=True)
+    if manager.tools.get('fuxa') is not item or item['process'].poll() is not None:raise ValueError('工程工具已变化。')
+    return True
+
+
+def fuxa_recovery_marker(paths):
+    """Conservatively invalidate stale normal verification on each snapshot."""
+    folder=paths['fuxa']/'plcdev';native=folder/'native-write-intents';journal=folder/'transaction.json'
+    try:
+        if native.is_symlink():return True
+        try:
+            with os.scandir(native) as entries:
+                if next(entries,None) is not None:return True
+        except FileNotFoundError:pass
+        if journal.is_symlink():return True
+        try:
+            with journal.open('rb') as stream:raw=stream.read(16*1024*1024+1)
+        except FileNotFoundError:return False
+        if len(raw)>16*1024*1024:return True
+        def unique(pairs):
+            value={}
+            for key,item in pairs:
+                if key in value:raise ValueError('duplicate field')
+                value[key]=item
+            return value
+        value=json.loads(raw.decode('utf-8-sig'),object_pairs_hook=unique,parse_constant=lambda _: (_ for _ in ()).throw(ValueError('non-JSON value')))
+        return value is not None and (not isinstance(value,dict) or 'resolution' in value)
+    except (OSError,ValueError,UnicodeError,RecursionError):return True
+
+
+def refresh_fuxa_recovery(manager,item):
+    """Do not let a stale normal verification survive a new write intent.
+
+    A normal in-flight save also has an intent briefly. Once it disappears,
+    only two matching ready contexts and fresh listener checks can restore the
+    ordinary verified state; missing marker alone is never sufficient.
+    """
+    if fuxa_recovery_marker(manager.paths):
+        item.update(verified=False,recoveryOnly=True);return
+    if not item.get('recoveryOnly'):return
+    now=time.monotonic()
+    if now-item.get('recoveryCheckAt',0)<2:return
+    item['recoveryCheckAt']=now
+    try:
+        if manager.tools.get('fuxa') is not item or item['process'].poll() is not None or not manager.current_configuration():return
+        first=manager.fuxa_context(timeout=.5)
+        if 'recovery' in first or first.get('projectFileStatus',{}).get('state')!='ready':return
+        if not isinstance(first.get('capability'),str) or not re.fullmatch(r'[a-f0-9]{48}',first['capability']):return
+        manager.verify_tool_listener('fuxa',fresh=True)
+        latest=manager.fuxa_context(timeout=.5)
+        if ('recovery' in latest or latest.get('projectFileStatus',{}).get('state')!='ready'
+                or latest.get('capability')!=first['capability'] or fuxa_recovery_marker(manager.paths)
+                or not manager.current_configuration() or manager.tools.get('fuxa') is not item or item['process'].poll() is not None):return
+        manager.verify_tool_listener('fuxa',fresh=True)
+        if not fuxa_recovery_marker(manager.paths) and manager.tools.get('fuxa') is item and item['process'].poll() is None:
+            item.update(verified=True,recoveryOnly=False)
+    except (OSError,ValueError,TypeError,KeyError,AttributeError):pass
 
 
 class FuxaOipManager(LocalProjectManager):
@@ -167,12 +280,17 @@ class FuxaOipManager(LocalProjectManager):
         result.update(mode=self.mode,toolsOpen=opened,toolsStarting=starting,toolErrors=dict(self.tool_errors),configurationLocked=locked,configFingerprint=self.config_hash)
         result['session'].update(mode=self.mode,configFingerprint=self.config_hash,runtimeState=state['runtimeState'])
         result['hmiOpen']=bool(self.tools.get('fuxa') and self.tools['fuxa']['process'].poll() is None)
+        if result['hmiOpen']:refresh_fuxa_recovery(self,self.tools['fuxa'])
         deps={item['id']:item for item in result['dependencies']};caps=result['capabilities']
+        recovery_only=bool(self.tools.get('fuxa') and self.tools['fuxa'].get('recoveryOnly') and result['hmiOpen'])
         caps.update(canPrepare=not active and not busy and not changed and not result['runtimeOwner'] and all(d['available'] for d in result['dependencies']),
                     canRun=active and fresh and self.phase=='ready' and state['runtimeState']=='STOPPED' and not result['projectChanged'],
                     canStop=active and self.phase=='ready' and state['runtimeState']!='STOPPED',canEnd=(active or opened) and not busy and not starting,
                     canShowHmi=deps['fuxa']['available'] and 'fuxa' not in starting,canOpenHmi=deps['fuxa']['available'] and 'fuxa' not in starting,canReconnectHmi=False,canConfigureProject=not locked)
         caps['tools'].update(fuxa=deps['fuxa']['available'] and 'fuxa' not in starting,eez=deps['fuxa']['available'] and 'fuxa' not in starting,oip=deps['oip']['available'] and 'oip' not in starting,factory=deps['oip']['available'] and 'oip' not in starting)
+        if recovery_only:
+            caps.update(canShowHmi=False,canOpenHmi=False)
+            caps['reasons']['canShowHmi']='FUXA 事务结果待核对，当前仅能打开编辑器保全现场。'
         if starting:caps['reasons']['canEnd']='正在打开本工程工具，请等待启动收束；仍可停止本工程 PLC。'
         if locked:caps['reasons']['canConfigureProject']='本工程工具或运行会话已打开；先显式结束，确保画面和场景保存。'
         if changed:caps['reasons']['canPrepare']='工程通信配置或场景已改变，请关闭本工程工具并重新打开工程。'
@@ -182,6 +300,7 @@ class FuxaOipManager(LocalProjectManager):
         for key,tool,label,file in [('eez','fuxa','FUXA 编辑器',self.project['hmi']),('hmi','fuxa','FUXA 运行画面',self.project['hmi']),('factory','oip','OIP 场景',self.project['scene'])]:
             item=self.tools.get(tool);alive=bool(item and item['process'].poll() is None)
             result['components'][key]={'available':deps[tool]['available'],'state':'process-alive' if alive else 'available' if deps[tool]['available'] else 'unavailable','label':'本工程入口已启动' if alive else label+' · 尚未打开','path':deps[tool]['path'],'projectFile':file,'projectId':self.project['id'],'windowVerified':False,'projectOpenVerified':bool(item and item.get('verified') and alive)}
+            if tool=='fuxa' and recovery_only:result['components'][key].update(label='事务待核对 · 仅供查看保全',projectOpenVerified=False)
             if tool in starting:result['components'][key].update(state='starting',label='正在打开本工程 '+label)
             elif self.tool_errors.get(tool):result['components'][key].update(state='launch-failed',label=self.tool_errors[tool])
         runtime=state['runtimeState'];comm=state.get('communication',{});channel=fresh and state.get('hmiConnected') is True
@@ -193,6 +312,7 @@ class FuxaOipManager(LocalProjectManager):
         factory.update(sceneIdentityVerified=bool(scene_verified),sceneIdentityVerifiedAt=state.get('observedAt') if scene_verified and active else oip_item.get('verifiedAt') if scene_verified and oip_item else None)
         hmi_verified=bool(result['hmiOpen'] and self.tools['fuxa'].get('verified'))
         links=result['links'];links['generate']={'source':'eez','target':'hmi','state':'current' if hmi_verified else 'unknown' if result['hmiOpen'] else 'unloaded','label':'原生画面 · 编辑与运行共用本工程文件' if hmi_verified else '等待本工程画面身份确认' if result['hmiOpen'] else '画面尚未打开','details':{'projectFile':self.project['hmi'],'provider':'fuxa'}}
+        if recovery_only:links['generate'].update(state='unknown',label='事务待核对 · 当前画面未确认写回工程')
         links['variables']={'source':'hmi','target':'runtime','state':'connected' if channel else 'unknown' if active and not fresh else 'disconnected' if active else 'inactive','label':'变量实时' if channel and state['telemetryFresh'] else '通道在线 · 历史值' if channel else '等待本工程画面心跳' if active else '无活动会话','observedAt':state.get('observedAt') if fresh else None,'channelConnected':bool(channel),'dataFresh':bool(channel and state['telemetryFresh']),'dataQuality':'live' if channel and state['telemetryFresh'] else 'historical' if channel and runtime=='STOPPED' else 'unknown','details':{'protocol':'本机 HTTP / PLC 邮箱','sessionId':result['sessionId'],'projectId':self.project['id']}}
         links['io']={'source':'runtime','target':'factory','state':'connected' if fresh and comm.get('connected') else 'unknown' if active and not fresh else 'disconnected' if active else 'inactive','label':'通信在线 · 待人工恢复' if fresh and comm.get('connected') and state.get('requiresManualRecovery') else 'OIP 通信在线' if fresh and comm.get('connected') else '等待 OIP 通信' if active else '无活动会话','observedAt':state.get('observedAt') if fresh else None,'sceneRunning':state.get('sceneRunning') if fresh else None,'requiresManualRecovery':state.get('requiresManualRecovery') if fresh else None,'details':{'protocol':'Modbus TCP','endpoint':'127.0.0.1:'+str(self.ports['modbus']) if self.ports else None,'sceneFile':self.project['scene'],'projectId':self.project['id']}}
         return result
@@ -253,8 +373,8 @@ class FuxaOipManager(LocalProjectManager):
         if not result.get('ok'):raise ValueError(result.get('error','Runtime 未确认命令'))
         return result
 
-    def fuxa_context(self):
-        with urlopen('http://127.0.0.1:'+str(self.ports['fuxa'])+'/plcdev/context',timeout=2) as response:value=json.load(response)
+    def fuxa_context(self,timeout=2):
+        with urlopen('http://127.0.0.1:'+str(self.ports['fuxa'])+'/plcdev/context',timeout=timeout) as response:value=json.load(response)
         if value.get('projectId')!=self.project['id'] or value.get('configHash')!=self.config_hash:raise ValueError('FUXA 工程身份不匹配，未复用其他画面')
         return value
 
@@ -276,19 +396,27 @@ class FuxaOipManager(LocalProjectManager):
             exe=setup(profile=self.paths['oip'],ports=self.ports,scene=Path(self.project['scene']))
             plan.update(argv=[str(exe),'--user-data-dir='+str(self.paths['oip']),str(Path(self.project['scene']).parent)],environment={'OIP_MCP_PORT':str(port),'OIP_PLCDEV_BOOTSTRAP':str(self.paths['oip']/'plcdev-bootstrap.json')})
         store(plan_path,plan)
-        with (self.paths['home']/(kind+'.log')).open('ab') as log:
+        log_path=self.paths['home']/(kind+'.log')
+        with log_path.open('ab') as log:
+            log.seek(0,2);log_offset=log.tell()
             child=subprocess.Popen([sys.executable,'-B','-X','utf8',str(Path(__file__).resolve()),'_tool','--plan',str(plan_path)],cwd=ROOT,env=env(),stdout=log,stderr=subprocess.STDOUT,creationflags=NO_WINDOW)
-        item={'process':child,'plan':plan_path,'stop':plan_path.with_suffix('.stop'),'verified':False};self.tools[kind]=item
+        item={'process':child,'plan':plan_path,'stop':plan_path.with_suffix('.stop'),'verified':False,'logPath':log_path,'logOffset':log_offset};self.tools[kind]=item
         return item
 
     def open_fuxa(self,view='editor'):
         item=self.spawn_tool('fuxa');deadline=time.monotonic()+25
         while time.monotonic()<deadline:
-            if item['process'].poll() is not None:raise RuntimeError('本工程 FUXA 未启动，请查看日志')
+            if item['process'].poll() is not None:raise RuntimeError(fuxa_start_failure(item.get('logPath'),item.get('logOffset',0)))
             try:
                 context=self.fuxa_context()
+                if 'recovery' in context:
+                    item['verified']=False;item['recoveryOnly']=True
+                    if view!='editor':raise RuntimeError('FUXA 事务待核对时只能打开编辑器，不打开运行画面。')
+                    try:fuxa_recovery_ready(self,item,context)
+                    except (OSError,ValueError,TypeError,KeyError,json.JSONDecodeError):raise RuntimeError('FUXA 事务归属或只读状态无法确认；请保留现场。') from None
+                    break
                 if context.get('projectFileStatus',{}).get('state')=='ready':
-                    self.verify_tool_listener('fuxa');item['verified']=True;break
+                    self.verify_tool_listener('fuxa');item['verified']=True;item['recoveryOnly']=False;break
             except (OSError,ValueError):pass
             time.sleep(.15)
         else:raise RuntimeError('FUXA 尚未确认本工程画面，请检查日志；未打开其他工程')
@@ -311,15 +439,15 @@ class FuxaOipManager(LocalProjectManager):
         else:raise RuntimeError('OIP 尚未确认本工程目录与场景。若窗口有“打开工程”确认框，请先确认并等待场景加载，再重试；本工程窗口已保留，未启动场景或 PLC。')
         self.event('已打开本工程 OIP，独立通信端口 '+str(self.ports['modbus'])+'；场景运行须显式操作。')
 
-    def verify_tool_listener(self,kind):
+    def verify_tool_listener(self,kind,*,fresh=False):
         item=self.tools[kind]
-        if item.get('listenerVerified'):return
+        if item.get('listenerVerified') and not fresh:return
         started=read(item['plan'].with_suffix('.started.json'),{})
         if started.get('projectId')!=self.project['id'] or not listener_owned(self.ports['fuxa' if kind=='fuxa' else 'mcp'],started.get('child')):
             raise ValueError('通信端口不属于本工程工具进程，未使用另一实例')
         item['listenerVerified']=True
 
-    def flush_tools(self):
+    def flush_tools(self, *, include_oip=True):
         item=self.tools.get('fuxa')
         if item and item['process'].poll() is None:
             context=self.fuxa_context()
@@ -327,7 +455,7 @@ class FuxaOipManager(LocalProjectManager):
             with urlopen(request,timeout=12) as response:flushed=json.load(response)
             if not flushed.get('ok'):raise ValueError('FUXA 画面尚未确认保存，保留工具供处理')
             if flushed.get('preservedConflict'):self.event('外部工程画面未覆盖；本窗口画面已另存到 '+str(flushed['preservedConflict']))
-        item=self.tools.get('oip')
+        item=self.tools.get('oip') if include_oip else None
         if item and item['process'].poll() is None:
             scene=oip_call('get_scene',port=self.ports['mcp'],timeout=2)
             if scene.get('project')!=self.bindings['oip']['scene']['project']:raise ValueError('OIP 已打开其他场景，保留窗口，请先处理工程身份')

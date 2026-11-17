@@ -15,14 +15,14 @@ function rebase(project,base='/plcdev/tags',definition=null){
  value.devices[deviceId].property={...value.devices[deviceId].property,getTags:base,postTags:true};
  return value;
 }
-function projectFile({file,projectId,configHash,profile,definition=null}){
+function projectFile({file,projectId,configHash,profile,definition=null,preserveOwner=false}){
  if(!file)return null;
  if(!path.isAbsolute(file)||!/^user-[a-f0-9]{32}$/.test(projectId||'')||typeof configHash!=='string'||!configHash.length)throw failure('FUXA 工程身份配置无效');
  const ownerFile=path.join(profile,'plcdev','project-owner.json');
  let previous=null;try{previous=JSON.parse(fs.readFileSync(ownerFile,'utf8'));}catch(e){if(e.code!=='ENOENT')throw failure('FUXA profile 工程身份记录无法读取');}
  if(previous&&previous.projectId!==projectId)throw failure('FUXA profile 属于另一个工程，拒绝复用');
- fs.mkdirSync(path.dirname(ownerFile),{recursive:true});
- fs.writeFileSync(ownerFile,JSON.stringify({version:1,projectId,file,configHash},null,2));
+ if(!preserveOwner){fs.mkdirSync(path.dirname(ownerFile),{recursive:true});
+ fs.writeFileSync(ownerFile,JSON.stringify({version:1,projectId,file,configHash},null,2));}
  let expected=null,nativeBaseline=null,status={state:'loading',projectId,configHash,file,hash:null,error:null};
  function load(base){try{const raw=fs.readFileSync(file),value=JSON.parse(raw.toString('utf8').replace(/^\uFEFF/,''));expected=digest(raw);nativeBaseline=null;status={...status,state:'loading',hash:expected,error:null};return rebase(value,base,definition);}catch(e){status={...status,state:'error',error:e.status?e.message:'工程画面文件无法读取'};throw failure(status.error);}}
  const normalizedHash=value=>digest(JSON.stringify(ordered(rebase(value,'/plcdev/tags',definition))));

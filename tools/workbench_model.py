@@ -43,7 +43,7 @@ class ModelLocalManager(FuxaLocalManager):
             result['capabilities'].update(canPrepare=False,canRun=False)
             reason='工程模型或接口声明已改变；结束所属会话并重新打开工程。'
             result['capabilities']['reasons'].update(canPrepare=reason,canRun=reason)
-        return result
+        return self.oip_snapshot(result)
 
     def ensure_bridge(self):
         if not self.project.get('hmi'):
@@ -51,6 +51,7 @@ class ModelLocalManager(FuxaLocalManager):
         return FuxaLocalManager.ensure_bridge(self)
 
     def tool(self,name):
+        if name in ('oip','factory'):return self.queue_tool('oip')
         if not self.project.get('hmi'):
             if name in ('fuxa','eez','hmi'):
                 raise ValueError('本工程未配置 HMI')
@@ -64,6 +65,7 @@ class ModelLocalManager(FuxaLocalManager):
 
     def end(self):
         if not self.project.get('hmi'):
+            if self.tools.get('oip'):return FuxaLocalManager.end(self)
             return UserProjectManager.end(self)
         return FuxaLocalManager.end(self)
 

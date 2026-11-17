@@ -8,8 +8,10 @@ from urllib.parse import parse_qs
 from factoryio_runtime import ROOT, store
 from workbench_start_stop import read, env, NO_WINDOW
 from workbench_user_project import UserProjectManager
-from workbench_fuxa_oip import FuxaOipManager, local_paths, allocate, FUXA_PACKAGE
+from workbench_fuxa_oip import FuxaOipManager, local_paths, allocate, FUXA_PACKAGE, refresh_fuxa_recovery
 from launch_fuxa_oip import identity, open_port
+from workbench_oip_link import OipEditorMixin
+from workbench_preview_status import preview_environment
 
 
 def fingerprint(project):
@@ -17,7 +19,7 @@ def fingerprint(project):
     manifest = read(Path(project['manifestPath']))
     if not isinstance(manifest, dict) or manifest.get('id') != project['id']:
         raise ValueError('工程身份已改变，请重新打开工程')
-    definition = validate_interface(read(Path(project['interfacePath'])))
+    definition = validate_interface(read(Path(project['interfacePath']))) if project.get('interfacePath') else None
     content = {'projectId': project['id'], 'application': manifest.get('application'),
                'target': manifest.get('target'), 'hmi': manifest.get('hmi'),
                'interface': manifest.get('interface'), 'definition': definition,
@@ -29,7 +31,12 @@ def fingerprint(project):
         content['modelBindingHash']=model['modelBindingHash']
         if model.get('scene'):
             content['sceneFiles']={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
-                                   for p in validate_oip(model['scene'])['files']}
+                                   for p in validate_oip(model['scene'],editing=True)['files']}
+    elif project.get('scene'):
+        from workbench_project_config import validate_oip
+        root=Path(project['projectRoot']).resolve()
+        content['sceneFiles']={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
+                              for p in validate_oip(project['scene'],editing=True)['files']}
     return hashlib.sha256(json.dumps(content, ensure_ascii=False, sort_keys=True,
                                     separators=(',', ':')).encode()).hexdigest()
 
@@ -167,7 +174,7 @@ class InterfaceBridge:
         return {'ok':True, 'applied':True, 'kind':9 if action=='run' else 10, 'value':0}
 
 
-class FuxaLocalManager(UserProjectManager):
+class FuxaLocalManager(OipEditorMixin, UserProjectManager):
     """One project, one local Runtime, and its editable FUXA engineering file."""
     run_prefix = 'workbench-interface'
     allocated = FuxaOipManager.allocated
@@ -176,14 +183,13 @@ class FuxaLocalManager(UserProjectManager):
     fuxa_context = FuxaOipManager.fuxa_context
     open_fuxa = FuxaOipManager.open_fuxa
     verify_tool_listener = FuxaOipManager.verify_tool_listener
-    flush_tools = FuxaOipManager.flush_tools
     queue_tool = FuxaOipManager.queue_tool
 
     def __init__(self, instance, project_config):
         super().__init__(instance, project_config)
         from project_interface import validate_interface
-        self.mode = 'fuxa-local'
-        self.interface = validate_interface(read(Path(self.project['interfacePath'])))
+        self.mode = 'fuxa-local' if self.project.get('hmi') else 'local'
+        self.interface = validate_interface(read(Path(self.project['interfacePath']))) if self.project.get('interfacePath') else None
         self.config_hash = fingerprint(self.project)
         self.paths = local_paths(self.project)
         self.paths['session'] = self.paths['home']/('interface-session-'+hashlib.sha256(str(instance).encode()).hexdigest()[:16]+'.json')
@@ -192,18 +198,21 @@ class FuxaLocalManager(UserProjectManager):
         self.bridge_lock = threading.Lock()
         self.tools, self.tool_workers, self.tool_errors = {}, {}, {}
         self.bridge = None
-        self.message = '本工程变量和操作已声明；打开 FUXA 编辑画面，编译后显式运行。'
+        self.message = ('本工程变量和操作已声明；打开 FUXA 编辑画面，编译后显式运行。' if self.interface else
+                        '本工程已关联 OIP 场景，可打开编辑；尚未建立 PLC 与场景的运行连接。')
 
     def current_configuration(self):
         try: return fingerprint(self.project) == self.config_hash
         except (ValueError, OSError, KeyError): return False
 
     def dependencies(self):
+        if not self.project.get('hmi'):return super().dependencies()
         return super().dependencies()+[
             {'id':'fuxa', 'label':'FUXA 本机编辑器', 'path':str(FUXA_PACKAGE/'main.js'), 'available':(FUXA_PACKAGE/'main.js').is_file()},
             {'id':'hmi-project', 'label':'本工程原生画面', 'path':str(self.project['hmi']), 'available':Path(self.project['hmi']).is_file()}]
 
     def ensure_bridge(self):
+        if self.interface is None or not self.project.get('hmi'):raise ValueError('本工程未配置 HMI 接口，不创建通信入口。')
         self.allocated()
         with self.bridge_lock:
             if self.bridge is None: self.bridge = InterfaceBridge(self)
@@ -222,7 +231,7 @@ class FuxaLocalManager(UserProjectManager):
 
     def build(self):
         super().build()
-        if self.phase == 'ready':
+        if self.phase == 'ready' and self.project.get('hmi'):
             try: self.ensure_bridge()
             except Exception as exc:
                 self.failure = str(exc)
@@ -239,9 +248,19 @@ class FuxaLocalManager(UserProjectManager):
                       toolErrors=dict(self.tool_errors), configurationLocked=locked,
                       configFingerprint=self.config_hash, projectChanged=result['projectChanged'] or changed)
         result['session'].update(mode='fuxa-local', configFingerprint=self.config_hash)
+        if not self.project.get('hmi'):
+            result['mode']='local';result['session']['mode']='local'
+            result['capabilities'].update(canConfigureInterface=not locked,
+                canEnd=(active or opened) and not starting and result['phase']!='building')
+            if changed:
+                result['capabilities'].update(canPrepare=False,canRun=False)
+                result['capabilities']['reasons']['canPrepare']='工程声明已改变，请重新打开工程。'
+            return self.oip_snapshot(result)
         item = self.tools.get('fuxa')
         alive = bool(item and item['process'].poll() is None)
-        verified = bool(alive and item.get('verified') and not changed)
+        if alive:refresh_fuxa_recovery(self,item)
+        recovery_only = bool(alive and item.get('recoveryOnly'))
+        verified = bool(alive and item.get('verified') and not changed and not recovery_only)
         result['hmiOpen'] = alive
         available = (FUXA_PACKAGE/'main.js').is_file()
         for key, label in (('eez','FUXA 编辑器'),('hmi','FUXA 运行画面')):
@@ -249,12 +268,16 @@ class FuxaLocalManager(UserProjectManager):
                 'label':self.tool_errors.get('fuxa') or ('正在打开本工程画面' if starting else '本工程入口已启动' if alive else label+' · 尚未打开'),
                 'path':str(FUXA_PACKAGE/'main.js'), 'projectFile':self.project['hmi'], 'projectId':self.project['id'],
                 'windowVerified':False, 'projectOpenVerified':verified}
+            if recovery_only:result['components'][key]['label']='事务待核对 · 仅供查看保全'
         result['components']['fuxa'] = dict(result['components']['eez'])
         caps = result['capabilities']
         caps.update(canOpenHmi=available and not starting and not changed, canShowHmi=available and not starting and not changed,
                     canEnd=(active or opened or self.bridge is not None) and not starting and result['phase']!='building',
                     canConfigureInterface=not locked, canInput=False)
         caps['tools'].update(eez=available and not starting and not changed, fuxa=available and not starting and not changed, factory=False, oip=False)
+        if recovery_only:
+            caps.update(canOpenHmi=False,canShowHmi=False)
+            caps['reasons']['canShowHmi']='FUXA 事务结果待核对，当前仅能打开编辑器保全现场。'
         if active: caps['canPrepare'] = False
         if changed:
             caps.update(canPrepare=False, canRun=False)
@@ -267,12 +290,13 @@ class FuxaLocalManager(UserProjectManager):
                 heartbeat = any(time.monotonic()-v['heartbeat'] < 1.5 for v in self.bridge.clients.values())
         result['links']['generate'] = {'source':'eez','target':'hmi','state':'current' if verified else 'unloaded',
                                       'label':'工程画面 · 原生可编辑', 'details':{'projectFile':self.project['hmi'], 'provider':'fuxa'}}
+        if recovery_only:result['links']['generate'].update(state='unknown',label='事务待核对 · 当前画面未确认写回工程')
         result['links']['variables'] = {'source':'hmi','target':'runtime','state':'connected' if verified and live and heartbeat else 'inactive' if not active else 'disconnected',
             'label':'声明变量实时' if verified and live and heartbeat else '等待本工程画面／实时变量',
             'channelConnected':bool(verified and heartbeat), 'observedAt':result['state'].get('observedAt') if result['observerFresh'] else None,
             'dataFresh':bool(verified and live and heartbeat), 'dataQuality':'live' if verified and live and heartbeat else 'unknown',
             'details':{'protocol':'工程声明 · 本机 Runtime','projectId':self.project['id'],'sessionId':result['sessionId']}}
-        return result
+        return self.oip_snapshot(result)
 
     def spawn_tool(self, kind):
         if kind != 'fuxa': raise ValueError('本工程未配置该工具')
@@ -291,7 +315,7 @@ class FuxaLocalManager(UserProjectManager):
                     '--session-file',str(self.paths['session']),'--port',str(port)],
             'environment':{'PLCDEV_FUXA_PROJECT_FILE':self.project['hmi'],'PLCDEV_FUXA_PROJECT_ID':self.project['id'],
                 'PLCDEV_FUXA_CONFIG_HASH':self.config_hash,'PLCDEV_FUXA_SESSION_FILE':str(self.paths['session']),
-                'PLCDEV_FUXA_INTERFACE_FILE':self.project['interfacePath']}}
+                'PLCDEV_FUXA_INTERFACE_FILE':self.project['interfacePath'],**preview_environment(self.project)}}
         store(plan_path, plan)
         with (self.paths['home']/'fuxa.log').open('ab') as log:
             child = subprocess.Popen([sys.executable,'-B','-X','utf8',str(ROOT/'tools/workbench_fuxa_oip.py'),'_tool','--plan',str(plan_path)],
@@ -301,8 +325,16 @@ class FuxaLocalManager(UserProjectManager):
         return item
 
     def tool(self, name):
+        if name in ('oip','factory'):return self.queue_tool('oip')
+        if name in ('fuxa','eez') and not self.project.get('hmi'):raise ValueError('本工程未配置 HMI。')
         if name in ('fuxa','eez'): return self.queue_tool('fuxa','editor')
         return super().tool(name)
+
+    def flush_tools(self):
+        self.assert_oip_idle_for_close()
+        # The legacy batch implementation flushes OIP through sync_folder,
+        # which may stop simulation. This editor-only lane must never do that.
+        return FuxaOipManager.flush_tools(self,include_oip=False)
 
     def end(self):
         if self.worker and self.worker.is_alive(): raise ValueError('正在准备，请稍后结束')

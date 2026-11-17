@@ -48,9 +48,13 @@ async function fixture(t, admission) {
     }
     if (req.url.startsWith('/api/status')) value = {
       service: 'plcdev-workbench', schemaVersion: 3, instance: INSTANCE,
-      agentTaskInputVersion: 'saved-revision-v1', project: { id: A },
+      agentTaskInputVersion: 'saved-revision-v1', projectInspectionVersion:1, runtimeEventsVersion:1, project: { id: A },
       projects: [{ id: A }], session: { id: 'session-A', active: true, projectId: A },
     };
+    else if (req.url.startsWith('/api/project-inspection')) value = {ok:true,schemaVersion:1,projectId:A,projectRevision:HASH,source:'saved-files-only',
+      editorState:{state:'unknown'},resources:[],signals:[],readback:{state:'untracked',baselineRevision:null,observedRevision:HASH,capturedRevision:null,acknowledgedRevision:null,changes:[],layoutOnly:false,lastReview:null},capabilities:{canCapture:true,canAcknowledgeLayout:false},limitations:[]};
+    else if (req.url.startsWith('/api/runtime-events')) value = {ok:true,schemaVersion:1,projectId:A,observedAt:Date.now()/1000,
+      currentSessionId:'session-A',projectRevision:null,events:[],sources:['compiler','runtime','fuxa','oip','plcdev'].map(id=>({id,label:id,state:'partial'}))};
     else if (req.url === '/api/agent/tasks') value = { ok: true,
       task: { projectId: A, taskId: 'task-' + '3'.repeat(32) } };
     else value = { ok: true };
@@ -74,7 +78,7 @@ async function fixture(t, admission) {
   const config = { projectRoot: root, controllerFile: descriptorPath };
   const ctx = {
     on() { return () => {}; },
-    systemPrompt: { context() { return () => {}; } },
+    systemPrompt: { context() { return () => {}; }, section() { return () => {}; } },
     sessionProjections: { stateOf() { return undefined; } },
     // Base-profile fixture intentionally has no optional native Teams service.
     inject(names,fn) { if(names.length===1&&names[0]==='connection'&&admission)fn({connection:{admit:admission},effect:ctx.effect});return () => {}; },
@@ -102,9 +106,21 @@ test('host serves bridge health with unique host identity and no cache or capabi
   const f = await fixture(t);
   const r = await f.request('/api/plcdev/health');
   assert.equal(r.status, 200); assert.equal(r.body.instance, INSTANCE);
+  assert.equal(r.body.nativeAgent.modelIndependent,true);assert.equal(r.body.nativeAgent.legacyRouteAvailable,true);assert.equal(r.body.nativeAgent.provider,undefined);
   assert.match(r.body.hostInstance, /^[a-f0-9-]{36}$/); assert.equal(r.body.hostPid, process.pid);
   assert.equal(r.headers['cache-control'], 'no-store'); assert.equal(r.headers['x-content-type-options'], 'nosniff');
   assert.equal(JSON.stringify(r).includes(TOKEN), false); assert.equal(JSON.stringify(r).includes(f.config.controllerFile), false);
+});
+
+test('keep receipt requires same-origin or authenticated desktop plus an owned task reference',async t=>{
+ const f=await fixture(t,req=>req.headers.cookie==='fixture-owner'?{peer:{principal:{kind:'owner'},signal:{aborted:false}}}:{rejection:401});
+ const route='/api/plcdev/conversations/review-receipt',body=JSON.stringify({conversationId:'native-chat',projectId:A,taskId:'task-'+'3'.repeat(32),candidateDigest:HASH,expectedRevision:HASH,action:'keep',clientRequestId:'keep-1'});
+ const json={'Content-Type':'application/json'};
+ assert.equal((await f.request(route,{method:'POST',headers:json,body})).status,403);
+ assert.equal((await f.request(route,{method:'POST',headers:{...json,Origin:'https://evil.example'},body})).status,403);
+ assert.equal((await f.request(route,{method:'POST',headers:{...json,Origin:f.base},body})).status,403);
+ assert.equal((await f.request(route,{method:'POST',headers:{...json,'X-PLCdev-Desktop':'1',Cookie:'fixture-owner'},body})).status,403);
+ assert.equal(f.upstreamCalls.length,0,'unowned or unauthenticated receipt must not reach the controller');
 });
 
 test('host rejects foreign Host, Origin and fetch-site before reaching controller', async t => {
@@ -125,6 +141,49 @@ test('GET accepts own origin and same-origin browser fetch without requiring a b
   assert.equal(f.upstreamCalls[0].method, 'GET');
 });
 
+test('project-wide conversation listing requires same-origin page or authenticated desktop owner', async t => {
+  const f = await fixture(t, req => req.headers.cookie === 'fixture-owner' ? {peer:{principal:{kind:'owner'},signal:{aborted:false}}} : {rejection:401});
+  const route='/api/plcdev/conversations/project?projectId='+A;
+  assert.equal((await f.request(route)).status,403);
+  assert.equal((await f.request(route,{headers:{'Sec-Fetch-Site':'same-origin',Referer:'http://evil.example/'}})).status,403);
+  assert.equal(f.upstreamCalls.length,0);
+  // This fixture does not provide sessionQuery; admission succeeds but listing
+  // must report unavailable, never a fabricated empty list.
+  assert.equal((await f.request(route,{headers:{Origin:f.base}})).status,503);
+  assert.equal((await f.request(route,{headers:{'X-PLCdev-Desktop':'1',Cookie:'fixture-owner'}})).status,503);
+});
+
+test('saved-file inspection and readback require same-origin or authenticated owner',async t=>{
+ const f=await fixture(t,req=>req.headers.cookie==='fixture-owner'?{peer:{principal:{kind:'owner'},signal:{aborted:false}}}:{rejection:401});
+ const route='/api/plcdev/project-inspection',query=route+'?project='+A;
+ assert.equal((await f.request(query)).status,403);
+ assert.equal((await f.request(query,{headers:{'Sec-Fetch-Site':'same-origin',Referer:'https://evil.example'}})).status,403);
+ assert.equal(f.upstreamCalls.length,0);
+ assert.equal((await f.request(query,{headers:{Origin:f.base}})).status,200);
+ assert.equal((await f.request(query,{headers:{'X-PLCdev-Desktop':'1',Cookie:'fixture-owner'}})).status,200);
+ const body=JSON.stringify({projectId:A,action:'capture',expectedRevision:HASH,expectedBaseline:null});
+ assert.equal((await f.request(route,{method:'POST',headers:{'Content-Type':'application/json'},body})).status,403);
+ assert.equal((await f.request(route,{method:'POST',headers:{'Content-Type':'application/json',Origin:f.base},body})).status,200);
+ assert.equal(f.upstreamCalls.at(-1).path,'/api/project-inspection');
+ assert.equal(f.upstreamCalls.at(-1).body.action,'capture');
+ assert.ok(f.upstreamCalls.every(call=>!call.path.startsWith('/api/action')));
+});
+
+test('runtime diagnostics require same-origin or authenticated desktop owner without action dispatch',async t=>{
+ const f=await fixture(t,req=>req.headers.cookie==='fixture-owner'?{peer:{principal:{kind:'owner'},signal:{aborted:false}}}:{rejection:401});
+ const route='/api/plcdev/runtime-events?project='+A;
+ for(const headers of [{},{'Sec-Fetch-Site':'same-origin',Referer:'https://evil.example/'},
+   {'X-PLCdev-Desktop':'1'},{Cookie:'fixture-owner'},{Origin:'http://evil.example'}])
+   assert.equal((await f.request(route,{headers})).status,403);
+ assert.equal(f.upstreamCalls.length,0);
+ for(const headers of [{Origin:f.base},{'Sec-Fetch-Site':'same-origin',Referer:f.base+'/'},{'X-PLCdev-Desktop':'1',Cookie:'fixture-owner'}]){
+   const result=await f.request(route,{headers});assert.equal(result.status,200);assert.equal(result.body.projectId,A);
+ }
+ const result=await f.request('/api/plcdev/runtime-events',{method:'POST',headers:{Origin:f.base,'Content-Type':'application/json'},body:JSON.stringify({projectId:A})});
+ assert.equal(result.status,404);
+ assert.ok(f.upstreamCalls.every(call=>call.method==='GET' && (call.path.startsWith('/api/status') || call.path.startsWith('/api/runtime-events'))));
+});
+
 test('POST requires an explicit matching Origin and exact JSON content type', async t => {
   const f = await fixture(t), body = JSON.stringify(taskBody());
   for (const headers of [
@@ -132,6 +191,33 @@ test('POST requires an explicit matching Origin and exact JSON content type', as
     { Origin: f.base, 'Content-Type': 'text/plain' }, { Origin: f.base },
   ]) assert.equal((await f.request('/api/plcdev/tasks', { method: 'POST', headers, body })).status, 403);
   assert.equal(f.upstreamCalls.length, 0);
+});
+
+test('backend recovery requires same-origin JSON or authenticated desktop and only probes an existing controller',async t=>{
+ const f=await fixture(t,req=>req.headers.cookie==='fixture-owner'?{peer:{principal:{kind:'owner'},signal:{aborted:false}}}:{rejection:401});
+ const route='/api/plcdev/backend/connect',body='{}';
+ for(const headers of [{'Content-Type':'application/json'},{Origin:'http://evil.example','Content-Type':'application/json'},{Origin:f.base,'Content-Type':'text/plain'}])
+  assert.equal((await f.request(route,{method:'POST',headers,body})).status,403);
+ assert.equal(f.upstreamCalls.length,0);
+ for(const headers of [{Origin:f.base,'Content-Type':'application/json'},{'X-PLCdev-Desktop':'1',Cookie:'fixture-owner','Content-Type':'application/json'}]){
+  const result=await f.request(route,{method:'POST',headers,body});assert.equal(result.status,200);assert.equal(result.body.connected,true);
+  assert.equal(JSON.stringify(result).includes(TOKEN),false);
+ }
+ assert.ok(f.upstreamCalls.every(call=>call.method==='GET'&&call.path==='/api/status'));
+});
+
+test('tool environment requires an owner and stays read-only without the controller',async t=>{
+ const f=await fixture(t,req=>req.headers.cookie==='fixture-owner'?{peer:{principal:{kind:'owner'},signal:{aborted:false}}}:{rejection:401});
+ const route='/api/plcdev/tool-environment';
+ await mkdir(path.join(f.root,'config'));await writeFile(path.join(f.root,'config/environment.defaults.json'),JSON.stringify({schemaVersion:1,tools:{editor:'editor.exe',fuxaPackage:'fuxa',oipExecutable:'oip.exe'}}));
+ await writeFile(path.join(f.root,'editor.exe'),'fixture-not-executable');
+ for(const headers of [{},{Origin:'https://evil.example'},{'Sec-Fetch-Site':'same-origin',Referer:'https://evil.example/'}])assert.equal((await f.request(route,{headers})).status,403);
+ for(const headers of [{Origin:f.base},{'X-PLCdev-Desktop':'1',Cookie:'fixture-owner'}]){
+   const r=await f.request(route,{headers});assert.equal(r.status,200);assert.deepEqual(r.body.tools.map(x=>x.state),['found','missing','missing','unchecked','unchecked']);assert.equal(r.headers['cache-control'],'no-store');assert.equal(JSON.stringify(r).includes(TOKEN),false);
+ }
+ assert.equal((await f.request(route+'?path=outside',{headers:{Origin:f.base}})).status,400);
+ assert.equal((await f.request(route,{method:'POST',headers:{Origin:f.base,'Content-Type':'application/json'},body:'{}'})).status,400);
+ assert.equal(f.upstreamCalls.length,0);
 });
 
 test('same-origin POST forwards candidate creation with saved version and proposal unchanged', async t => {
@@ -145,8 +231,10 @@ test('same-origin POST forwards candidate creation with saved version and propos
 
 test('oversize or malformed JSON never reaches controller and reports an explicit client error', async t => {
   const f = await fixture(t), headers = { Origin: f.base, 'Content-Type': 'application/json' };
-  const large = await f.request('/api/plcdev/tasks', { method: 'POST', headers, body: 'x'.repeat(131073) });
+  const large = await f.request('/api/plcdev/tasks', { method: 'POST', headers, body: 'x'.repeat(1048577) });
   assert.equal(large.status, 413);
+  const ordinary = await f.request('/api/plcdev/conversations/review', { method: 'POST', headers, body: 'x'.repeat(131073) });
+  assert.equal(ordinary.status, 413,'only candidate submission endpoints accept larger source plans');
   assert.equal((await f.request('/api/plcdev/tasks', { method: 'POST', headers, body: '{' })).status, 400);
   assert.equal(f.upstreamCalls.length, 0);
 });
@@ -195,4 +283,31 @@ test('desktop write requires authenticated owner and retains source fence',async
  const result=await f.request(route,{method:'POST',headers:{...headers,Cookie:'fixture-owner'},body});
  assert.equal(result.status,200);assert.equal(result.body.projectId,A);assert.equal(result.body.version,1);
  assert.equal((await f.request(route,{method:'POST',headers:{...headers,Cookie:'fixture-owner'},body})).status,409);
+});
+
+
+test('project operation receipts require same-origin or authenticated desktop owner',async t=>{
+ const f=await fixture(t,req=>req.headers.cookie==='fixture-owner'?{peer:{principal:{kind:'owner'},signal:{aborted:false}}}:{rejection:401});
+ const route='/api/plcdev/project-operations?requestId=absent';
+ assert.equal((await f.request(route)).status,403);
+ assert.equal((await f.request(route,{headers:{'Sec-Fetch-Site':'same-origin',Referer:'http://evil.example/'}})).status,403);
+ assert.equal((await f.request(route,{headers:{Origin:f.base}})).status,404);
+ assert.equal((await f.request(route,{headers:{'X-PLCdev-Desktop':'1',Cookie:'fixture-owner'}})).status,404);
+ const body=JSON.stringify({requestId:'receipt',projectId:A,sessionId:'session-A',action:'project-open',manifestPath:path.join(f.root,'project.plcdev')});
+ assert.equal((await f.request('/api/plcdev/project-operations',{method:'POST',headers:{'Content-Type':'application/json'},body})).status,403);
+ const result=await f.request('/api/plcdev/project-operations',{method:'POST',headers:{Origin:f.base,'Content-Type':'application/json'},body});
+ assert.equal(result.status,503);assert.equal((await f.request('/api/plcdev/project-operations?requestId=receipt',{headers:{Origin:f.base}})).body.state,'unknown');
+ assert.equal(f.upstreamCalls.filter(x=>x.path==='/api/action').length,0);
+});
+
+test('legacy FUXA recovery status requires same-origin or authenticated desktop owner',async t=>{
+ const f=await fixture(t,req=>req.headers.cookie==='fixture-owner'?{peer:{principal:{kind:'owner'},signal:{aborted:false}}}:{rejection:401});
+ const route='/api/plcdev/fuxa-recovery?project='+A;
+ assert.equal((await f.request(route)).status,403);
+ assert.equal((await f.request(route,{headers:{'Sec-Fetch-Site':'same-origin',Referer:'http://evil.example/'}})).status,403);
+ assert.equal(f.upstreamCalls.length,0);
+ // Fixture has no valid recovery response; admission succeeds but remains unavailable.
+ assert.equal((await f.request(route,{headers:{Origin:f.base}})).body.code,'recovery_mismatch');
+ assert.equal((await f.request(route,{headers:{'X-PLCdevdev-Desktop':'1',Cookie:'fixture-owner'}})).status,403);
+ assert.equal((await f.request(route,{headers:{'X-PLCdev-Desktop':'1',Cookie:'fixture-owner'}})).body.code,'recovery_mismatch');
 });
