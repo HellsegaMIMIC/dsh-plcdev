@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp, mkdir, writeFile, rm} from 'node:fs/promises';
+import {mkdtemp, mkdir, writeFile, realpath, rm} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {createBackendService} from '../src/backend-service.mjs';
@@ -38,8 +38,9 @@ test('explicit recovery launches only fixed ensure with the matching descriptor 
  const f=await fixture(t,{environment:{NODE_OPTIONS:'bad',ELECTRON_RUN_AS_NODE:'1',PYTHONPATH:'bad',OPENPLC_TEST:'bad',PLCDEV_AGENT_HOME:'preserved-agent',PLCDEV_PROJECT_INDEX:'preserved-index'}});
  assert.deepEqual(await f.service.handle('POST',ROUTE,{}),ready);
  assert.equal(f.launches.length,1);
- const [python,args,options]=f.launches[0];assert.equal(python.toLowerCase(),process.execPath.toLowerCase());
- assert.deepEqual(args.slice(0,3),['-B','-X','utf8']);assert.equal(args[3].toLowerCase(),path.join(f.root,'tools/plcdev_workbench.py').toLowerCase());assert.deepEqual(args.slice(4),['ensure']);
+ const [python,args,options]=f.launches[0];assert.equal(await realpath(python),await realpath(process.execPath));
+ assert.deepEqual(args.slice(0,3),['-B','-X','utf8']);assert.equal(await realpath(args[3]),await realpath(path.join(f.root,'tools/plcdev_workbench.py')));assert.deepEqual(args.slice(4),['ensure']);
+ assert.equal(options.cwd,await realpath(f.root));
  assert.equal(options.shell,false);assert.equal(options.windowsHide,true);assert.equal(options.timeout,35000);
  assert.equal(options.env.PLCDEV_WORKBENCH_HOME,path.join(f.root,'state'));
  assert.equal(options.env.PLCDEV_AGENT_HOME,'preserved-agent');assert.equal(options.env.PLCDEV_PROJECT_INDEX,'preserved-index');

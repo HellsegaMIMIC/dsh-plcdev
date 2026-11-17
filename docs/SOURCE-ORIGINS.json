@@ -99,7 +99,7 @@
     "software/dsh-plcdev/src/teams.mjs": "b3d82978ef66a5e7451bdc7f03acf4741311eb2c2422ca6e6a71b6594b85fa5e",
     "software/dsh-plcdev/src/tool-environment.mjs": "482529e703977dd88923f9608551cb3ebe6296d21ddbdc476bbce9c2059b86d3",
     "software/dsh-plcdev/tests/backend-connection-ui.test.mjs": "6016ff5da7956cd3e8c5a4a6d5b37549396ad4cc154d771657e6c57415ad5ed0",
-    "software/dsh-plcdev/tests/backend-service.test.mjs": "56638e17669b2a6b1c6f26c4a2d0e3493990c3595c8dde18a996490a70fe642f",
+    "software/dsh-plcdev/tests/backend-service.test.mjs": "6c112cb8d63f1b7647f1f76b153eac215debda5f7753aad6f237e630364006a2",
     "software/dsh-plcdev/tests/bridge.test.mjs": "df4574eff2c667dac8588febf081c093e5a6a8e201bbcf7bd24868d92dbf6d02",
     "software/dsh-plcdev/tests/candidate-operations.test.mjs": "c87a8a83bfe45ad34127edae071b1e47f383e0bd36b103236ee992e31d539e62",
     "software/dsh-plcdev/tests/candidate-result-card.test.mjs": "fe4c0d5bcd304c1842d5b6ef0125bf6e39328bc65dc75e8e667da144e9c0856d",
