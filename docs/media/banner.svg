@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 416" role="img" aria-labelledby="banner-title banner-desc" id="banner-root">
+<title id="banner-title">PLCdev：同一个工程，同一段对话</title>
+<desc id="banner-desc">PLCdev for DeepSeek Harness 将 PLC 程序、HMI 画面与仿真场景的修改放入同一个工程对话。</desc>
+<!-- Lucide parentheses — ISC License. Copyright (c) 2026 Lucide Icons and Contributors.
+Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. -->
+  <defs>
+      <style>1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;family=Noto+Sans+TC:wght@400;500;600&amp;family=Noto+Serif+TC:wght@400&amp;display=swap');
+      #banner-root { font-family: "Segoe UI","Microsoft YaHei",sans-serif; color: #252234; }
+      #banner-root .diagram-container { overflow-x:auto;width:100% }
+      #banner-root .diagram-container { overflow:visible }</style>
+  </defs>
+<rect width="1280" height="416" fill="#faf8fd"/>
+<rect x="0" y="0" width="1280" height="8" fill="#7250B8"/>
+<g transform="translate(56 52) scale(2)" fill="none" stroke="#7250B8" stroke-width="3.35" stroke-linecap="butt" stroke-linejoin="miter"><g transform="translate(.96 .96) scale(.92)" stroke-width="3.6413"><path transform="translate(.75 0)" d="M8 21s-4-3-4-9 4-9 4-9"/><path transform="translate(-.75 0)" d="M16 3s4 3 4 9-4 9-4 9"/></g><path d="M1.49 12H5.33M18.67 12h3.84"/></g>
+<text x="124" y="90" font-size="42" font-weight="700" fill="#7250B8">PLCdev</text>
+<text x="332" y="87" font-size="20" fill="#736b80">for DeepSeek Harness</text>
+<text x="56" y="184" font-size="48" font-weight="700" fill="#252234">同一个工程，同一段对话。</text>
+<text x="56" y="236" font-size="25" fill="#5c566b">协调 PLC 程序、HMI 画面与仿真场景的每一次修改。</text>
+<path d="M56 276H1224" stroke="#ded6ea" stroke-width="1"/>
+<text x="56" y="326" font-size="20" font-weight="600" fill="#4d435e">OpenPLC</text>
+<text x="194" y="326" font-size="20" fill="#a398b4">/</text>
+<text x="224" y="326" font-size="20" font-weight="600" fill="#4d435e">FUXA</text>
+<text x="314" y="326" font-size="20" fill="#a398b4">/</text>
+<text x="344" y="326" font-size="20" font-weight="600" fill="#4d435e">Open Industry Project</text>
+<text x="1224" y="326" text-anchor="end" font-size="18" fill="#736b80">提出需求 → 查看变化 → 保留或撤销</text>
+<text x="56" y="378" font-size="14" letter-spacing="2" fill="#867a94">OPEN SOURCE · WINDOWS DEVELOPMENT PREVIEW</text>
+</svg>

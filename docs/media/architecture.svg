@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-labelledby="architecture-title architecture-desc" id="architecture-root">
+<title id="architecture-title">PLCdev 工程与工具架构</title>
+<desc id="architecture-desc">DSH 提供对话和模型，PLCdev 管理工程上下文与候选并连接三种原生工具，独立读取运行关系、变量和事件。</desc>
+<defs>
+      <style>1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;family=Noto+Serif:ital@0;1&amp;family=Noto+Sans+KR:wght@400;500;600&amp;family=Noto+Serif+KR:wght@400&amp;family=Noto+Sans+TC:wght@400;500;600&amp;family=Noto+Serif+TC:wght@400&amp;display=swap');
+      #architecture-root { color: #252234; font-family: "Segoe UI","Microsoft YaHei",sans-serif; }
+      #architecture-root .diagram-container { overflow-x:auto;width:100% }
+      #architecture-root .diagram-container { overflow:visible }</style>
+<marker id="architecture-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#8b829b"/></marker>
+<marker id="architecture-arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#7250B8"/></marker>
+<marker id="architecture-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
+</defs>
+<rect width="1280" height="720" fill="#faf8fd"/>
+<text x="56" y="60" font-size="14" letter-spacing="2" fill="#736b80">HOW IT FITS TOGETHER</text>
+<text x="56" y="116" font-size="36" font-weight="700" fill="#252234">工程集中管理，编辑回到原生工具。</text>
+<text x="56" y="156" font-size="20" fill="#6b6279">模型提出修改计划，你查看并决定是否保留。</text>
+<!-- Connectors precede nodes; each focal-node port is distinct. -->
+<path d="M336 388H472" fill="none" stroke="#8b829b" stroke-width="2" marker-end="url(#architecture-arrow)"/>
+<path d="M824 344H872Q880 344 880 336V248Q880 240 888 240H944" fill="none" stroke="#8b829b" stroke-width="2" marker-end="url(#architecture-arrow)"/>
+<path d="M824 388H944" fill="none" stroke="#8b829b" stroke-width="2" marker-end="url(#architecture-arrow)"/>
+<path d="M824 432H872Q880 432 880 440V528Q880 536 888 536H944" fill="none" stroke="#8b829b" stroke-width="2" marker-end="url(#architecture-arrow)"/>
+<path d="M648 476V544" fill="none" stroke="#8b829b" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#architecture-arrow)"/>
+<rect x="352" y="352" width="104" height="28" fill="#faf8fd"/><text x="404" y="373" font-size="16" text-anchor="middle" fill="#736b80">工具调用</text>
+<rect x="56" y="332" width="280" height="112" rx="8" fill="#fff" stroke="#d8d0e3" stroke-width="1.5"/>
+<text x="80" y="376" font-size="27" font-weight="600" fill="#252234">DeepSeek Harness</text>
+<text x="80" y="414" font-size="19" fill="#736b80">对话 · 当前模型 · 工具调用</text>
+<rect x="472" y="300" width="352" height="176" rx="8" fill="#f1ebfa" stroke="#7250B8" stroke-width="2"/>
+<text x="500" y="348" font-size="32" font-weight="700" fill="#7250B8">PLCdev</text>
+<text x="500" y="390" font-size="22" fill="#453652">工程上下文与本机工程服务</text>
+<text x="500" y="434" font-size="20" fill="#6b6279">候选修改 → 审阅 → 保存版本</text>
+<rect x="944" y="184" width="280" height="112" rx="8" fill="#fff" stroke="#d8d0e3" stroke-width="1.5"/>
+<text x="968" y="228" font-size="28" font-weight="600" fill="#252234">OpenPLC</text><text x="968" y="266" font-size="19" fill="#736b80">PLC 程序 / ST / 梯形图</text>
+<rect x="944" y="332" width="280" height="112" rx="8" fill="#fff" stroke="#d8d0e3" stroke-width="1.5"/>
+<text x="968" y="376" font-size="28" font-weight="600" fill="#252234">FUXA</text><text x="968" y="414" font-size="19" fill="#736b80">HMI 画面与显示</text>
+<rect x="944" y="480" width="280" height="112" rx="8" fill="#fff" stroke="#d8d0e3" stroke-width="1.5"/>
+<text x="968" y="524" font-size="28" font-weight="600" fill="#252234">OIP</text><text x="968" y="562" font-size="19" fill="#736b80">三维场景与原生部件</text>
+<rect x="472" y="544" width="352" height="88" rx="8" fill="#fff" stroke="#d8d0e3" stroke-width="1.5"/>
+<text x="496" y="580" font-size="23" font-weight="600" fill="#453652">运行关系 · 变量 · 事件</text><text x="496" y="612" font-size="18" fill="#736b80">读取已有状态与结构化回执</text>
+<path d="M56 660H1224" stroke="#ded6ea"/>
+<path d="M56 688H92" stroke="#8b829b" stroke-width="2"/><text x="104" y="694" font-size="16" fill="#736b80">编辑协作</text>
+<path d="M232 688H268" stroke="#8b829b" stroke-width="2" stroke-dasharray="5 4"/><text x="280" y="694" font-size="16" fill="#736b80">运行观察</text>
+<text x="1224" y="694" text-anchor="end" font-size="16" fill="#736b80">保存、编译与运行分别确认</text>
+</svg>
